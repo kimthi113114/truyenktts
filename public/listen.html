@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="vi">
+
+<head>
+    <meta charset="utf-8">
+    <title>Truyện K-TTS</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="css/listen.css">
+    <link rel="icon" href="icon/favico.ico" type="image/x-icon">
+
+    <link rel="manifest" href="manifest.json">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="apple-mobile-web-app-title" content="Truyện K-TTS">
+</head>
+
+<body>
+    <div class="sidebar" id="sidebar">
+        <div class="sidebar-header">
+            <div style="display:grid;grid-template-columns:3fr 1fr;gap:10px">
+                <h2>📚 Thư Viện</h2>
+                <!-- <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button> -->
+            </div>
+            <select id="storySelect" class="story-select" onchange="onStoryChange(this.value)">
+                <option value="">-- Chọn truyện --</option>
+            </select>
+        </div>
+        <div class="chapter-list" id="chapterList">
+            <div style="text-align:center;padding:20px;color:#6b7280">Vui lòng chọn truyện để xem danh sách chương</div>
+        </div>
+        <div id="info" class="info">
+            <img src="icon/favico.png" alt="" style="width:50px;height:50px">
+            <span>Truyện K-TTS</span>
+            <i>version 1.0.6</i>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="top-bar">
+            <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
+            <h6 id="currentChapterTitle" style="font-weight:600;color:var(--text-dark)">Chưa chọn chương</h6>
+            <div style="display:flex;gap:10px">
+                <button class="nav-btn" onclick="openSettingsModal()" title="Cài đặt">⚙️</button>
+                <link
+                    href="https://fonts.googleapis.com/css2?family=Gilda+Display&family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&family=Spectral:wght@400;600;700&display=swap"
+                    rel="stylesheet">
+            </div>
+        </div>
+        <div class="reading-area" id="readingArea" onclick="toggleTTSControls()">
+            <div style="text-align:center;margin-top:100px;color:#9ca3af">
+                <p style="font-size:4rem;margin-bottom:20px"><img src="icon/favico.png" alt=""
+                        style="width:50px;height:50px"></p>
+                <p>Chọn truyện và chương để bắt đầu đọc</p>
+            </div>
+        </div>
+
+        <div class="tts-controls" id="ttsControls">
+            <div class="control-group">
+                <select id="ttsVoice" onchange="onChangeSetting('voice', this.value)">
+                    <option value="vi-VN-NamMinhNeural">Nam Minh (Nam)</option>
+                    <option value="vi-VN-HoaiMyNeural">Hoài My (Nữ)</option>
+                    <option value="de-DE-SeraphinaMultilingualNeural">Seraphina (Nữ)</option>
+                    <option value="fr-FR-VivienneMultilingualNeural">Vivienne (Nữ)</option>
+                    <option value="en-US-EmmaMultilingualNeural">Emma (Nữ)</option>
+                    <option value="en-US-BrianMultilingualNeural">Brian (Nam)</option>
+                    <option value="fr-FR-RemyMultilingualNeural">Remy (Nam)</option>
+                    <option value="it-IT-GiuseppeMultilingualNeural">Giuseppe (Nam)</option>
+                    <option value="ko-KR-HyunsuMultilingualNeural">Hyunsu (Nam)</option>
+                    <option value="pt-BR-ThalitaMultilingualNeural">Thalita (Nữ)</option>
+
+                </select>
+                <select id="ttsSpeed" onchange="onChangeSetting('speed', this.value)">
+                    <option value="0.8">0.8x</option>
+                    <option value="1.0" selected>1.0x</option>
+                    <option value="1.2">1.2x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="1.75">1.75x</option>
+                    <option value="2.0">2.0x</option>
+                </select>
+                <button class="nav-btn" onclick="scrollToCurrentSentence()" title="Đến vị trí đang đọc">📍</button>
+                <button class="nav-btn" onclick="toggleAutoScroll()" title="Tự động cuộn/highlight"
+                    id="autoScrollBtn">📜</button>
+                <button class="nav-btn" onclick="openSleepTimerModal()" title="Hẹn giờ tắt"
+                    id="sleepTimerBtn">🌙</button>
+            </div>
+            <div class="playback-controls">
+                <button class="nav-btn" onclick="prevChapter()">⏮️ Trước</button>
+                <button id="speakBtn" class="btn-play" onclick="showStartModal()">
+                    <span>🔊</span> Đọc Ngay
+                </button>
+                <button class="nav-btn" onclick="nextChapter()">Sau ⏭️</button>
+            </div>
+            <div class="playback-controls">
+                <div class="status-text" id="status"></div>
+            </div>
+
+            <div id="sleepTimerCountdown"
+                style="display:none;text-align:center;padding:8px;background:rgba(251,191,36,0.1);border-radius:8px;margin-top:8px;color:#f59e0b;font-weight:600;font-size:14px;">
+                🌙 Tắt sau: <span id="countdownTime">00:00</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- <button class="tts-toggle" id="ttsToggle" onclick="toggleTTSControls()" title="Ẩn/Hiện điều khiển">🔧</button> -->
+    <div class="toast" id="toast">
+        <span class="toast-icon">✅</span>
+        <span class="toast-message">Thông báo</span>
+    </div>
+
+    <!-- Start Position Modal -->
+    <div class="modal-overlay" id="startModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🔊 Bắt đầu phát</h3>
+            </div>
+            <div class="modal-body-overflow-y-hidden" id="modalBody">
+                <div class="modal-option" onclick="selectStartOption('continue')">
+                    <h4>📍 Tiếp tục từ câu đã lưu</h4>
+                    <p id="savedPositionText">Tiếp tục từ câu đã đọc trước đó</p>
+                </div>
+                <div class="modal-option" onclick="selectStartOption('choose')">
+                    <h4>🎯 Chọn câu để bắt đầu</h4>
+                    <p>Chọn câu cụ thể từ danh sách</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>⚙️ Cài đặt giao diện</h3>
+                <button onclick="closeSettingsModal()"
+                    style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="settings-section">
+                    <h4>🎨 Giao diện</h4>
+                    <div class="theme-options">
+                        <div class="theme-option light" onclick="setTheme('light')">Sáng</div>
+                        <div class="theme-option dark" onclick="setTheme('dark')">Tối</div>
+                        <div class="theme-option ancient" onclick="setTheme('ancient')">Cổ trang</div>
+                        <div class="theme-option modern" onclick="setTheme('modern')">Hiện đại</div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <h4>🔤 Font chữ</h4>
+                    <select id="fontSelect" onchange="setFont(this.value)" style="width:100%">
+                        <option default value="'Inter', sans-serif">Mặc định (Inter)</option>
+                        <option value="'Merriweather', serif">Merriweather (Có chân)</option>
+                        <option value="'Roboto', sans-serif">Roboto</option>
+                        <option value="'Patrick Hand', cursive">Viết tay</option>
+
+                        <option value="'Avenir Next', -apple-system, sans-serif">Avenir Next</option>
+                        <option value="'Canela', 'Gilda Display', serif">Canela</option>
+                        <option value="'Charter', 'Bitstream Charter', Georgia, serif">Charter</option>
+                        <option value="'Georgia', serif">Georgia</option>
+                        <option value="'Iowan Old Style', Palatino, serif">Iowan</option>
+                        <option value="'Palatino', 'Palatino Linotype', serif">Palatino</option>
+                        <option value="'Proxima Nova', -apple-system, sans-serif">Proxima Nova</option>
+                        <option value="'Publico', Spectral, serif">Publico</option>
+                        <option value="'-apple-system', 'San Francisco', BlinkMacSystemFont, sans-serif">San Francisco
+                        </option>
+                        <option value="'New York', 'Times New Roman', serif">New York</option>
+                        <option value="'Seravek', 'Avenir Next', -apple-system, sans-serif">Seravek</option>
+                    </select>
+
+                </div>
+                <div class="settings-section">
+                    <h4>Aa Kích thước chữ</h4>
+                    <div class="font-size-controls">
+                        <button onclick="adjustFontSize(-1)">A-</button>
+                        <span id="currentFontSize">18px</span>
+                        <button onclick="adjustFontSize(1)">A+</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sleep Timer Modal -->
+    <div class="modal-overlay" id="sleepTimerModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>🌙 Hẹn giờ tắt</h3>
+                <button onclick="closeSleepTimerModal()"
+                    style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="modal-option" onclick="setSleepTimer(null)" style="border-color:var(--danger)">
+                    <h4 style="color:var(--danger)">❌ Hủy hẹn giờ</h4>
+                    <p>Tắt chế độ hẹn giờ</p>
+                </div>
+                <div class="modal-option" onclick="setSleepTimer(1)">
+                    <h4>1 Phút</h4>
+                    <p>Tự động tắt sau 1 phút</p>
+                </div>
+                <div class="modal-option" onclick="setSleepTimer(5)">
+                    <h4>5 Phút</h4>
+                    <p>Tự động tắt sau 5 phút</p>
+                </div>
+                <div class="modal-option" onclick="setSleepTimer(15)">
+                    <h4>15 Phút</h4>
+                    <p>Tự động tắt sau 15 phút</p>
+                </div>
+                <div class="modal-option" onclick="setSleepTimer(30)">
+                    <h4>30 Phút</h4>
+                    <p>Tự động tắt sau 30 phút</p>
+                </div>
+                <div class="modal-option" onclick="setSleepTimer(60)">
+                    <h4>60 Phút</h4>
+                    <p>Tự động tắt sau 60 phút</p>
+                </div>
+                <div class="modal-option" onclick="setSleepTimer('chapter')">
+                    <h4>Hết chương này</h4>
+                    <p>Tự động tắt khi đọc xong chương hiện tại</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/listen.js"></script>
+</body>
+
+</html>

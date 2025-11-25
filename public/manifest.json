@@ -1,0 +1,20 @@
+{
+    "name": "Đọc & Nghe Truyện K-TTS",
+    "short_name": "Truyện K-TTS",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#667eea",
+    "icons": [
+        {
+            "src": "/icon/favico.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "/icon/favico.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}
