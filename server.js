@@ -2,7 +2,7 @@ import express from "express";
 import path from "path";
 import fs from "fs"; // Import fs
 import { fileURLToPath } from "url";
-import { configureFfmpeg } from "./utils/ffmpegConfig.js";
+
 import dSachTruyen from "./data/dSachTruyen.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -11,7 +11,7 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-configureFfmpeg(); // setup ffmpeg/ffprobe paths
+
 
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
@@ -23,23 +23,11 @@ app.get("/", (req, res) => {
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/audio", express.static(path.join(__dirname, "output"))); // Serve audio files
 
-import extractRoute from "./routes/extract.js";
-import exportEpubRoute from "./routes/exportEpub.js";
-import exportEpubUnTocRoute from "./routes/exportEpubUnToc.js";
-import ttsRoute from "./routes/tts.js";
 import ttsLiveRoute from "./routes/ttsLive.js";
-import videoExportRoute from "./routes/videoExport.js";
 
-app.use("/", extractRoute);
-app.use("/", exportEpubRoute);
-app.use("/", exportEpubUnTocRoute);
-app.use("/api", ttsRoute);
 app.use("/api", ttsLiveRoute);
-app.use("/api", videoExportRoute);
 
-app.get("/api/stories", (req, res) => {
-    res.json(dSachTruyen);
-});
+
 
 app.get("/api/stories-listen", (req, res) => {
     res.json(dSachTruyen.filter(story => !story.hidden));

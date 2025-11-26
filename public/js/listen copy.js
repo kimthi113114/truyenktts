@@ -236,7 +236,7 @@ async function onStoryChange(storyId) {
 }
 async function stopPlaying() {
     const btn = document.getElementById("speakBtn");
-    if (btn.textContent.includes("Dừng")) {
+    if (btn?.textContent?.includes("Dừng")) {
         await startLiveTTS();
         return;
     }
