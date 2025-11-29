@@ -127,7 +127,7 @@ async function loadProgress() {
             setTimeout(() => {
                 const sentences = document.querySelectorAll('.sentence');
                 if (sentences[mostRecent.sentenceIndex]) {
-                    sentences[mostRecent.sentenceIndex].scrollIntoView({ behavior: 'auto', block: 'center' });
+                    sentences[mostRecent.sentenceIndex].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
                     sentences[mostRecent.sentenceIndex].style.backgroundColor = '#dbeafe';
                     setTimeout(() => sentences[mostRecent.sentenceIndex].style.backgroundColor = '', 3000);
                 }
@@ -149,18 +149,19 @@ function showToast(message, type = 'success') {
     setTimeout(() => toastEl.classList.remove('show'), 1500);
 }
 
-function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth <= 768) sidebar.classList.toggle('open');
-    else sidebar.classList.toggle('collapsed');
+function openLibraryModal() {
+    document.getElementById('libraryModal').classList.add('show');
+    const activeElement = document.querySelector('.chapter-item.active');
+    if (activeElement) {
+        activeElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+    }
+}
+
+function closeLibraryModal() {
+    document.getElementById('libraryModal').classList.remove('show');
 }
 
 function toggleTTSControls() {
-    const sidebar = document.getElementById('sidebar');
-    if (sidebar.classList.contains('open')) {
-        toggleSidebar();
-        return;
-    }
     const controls = document.getElementById('ttsControls');
     const toggle = document.getElementById('ttsToggle');
     if (controls.classList.contains('collapsed'))
@@ -209,7 +210,7 @@ async function init() {
                         setTimeout(() => {
                             const sentences = document.querySelectorAll('.sentence');
                             if (sentences[progress.sentenceIndex]) {
-                                sentences[progress.sentenceIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                sentences[progress.sentenceIndex].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
                                 sentences[progress.sentenceIndex].style.backgroundColor = '#dbeafe';
                                 setTimeout(() => sentences[progress.sentenceIndex].style.backgroundColor = '', 3000);
                             }
@@ -348,14 +349,14 @@ function loadChapter(num, fromRestore = false) {
         const rect = activeItem.getBoundingClientRect();
         if (rect.top < 0 || rect.bottom > window.innerHeight) {
             setTimeout(() => {
-                activeItem.scrollIntoView({ behavior: 'auto', block: 'center' });
+                activeItem.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
             }, 100);
         }
     }
 
     document.getElementById('status').textContent = '';
-    if (window.innerWidth <= 768) document.getElementById('sidebar').classList.remove('open');
-    readingArea.scrollTop = 0;
+    closeLibraryModal();
+    window.scrollTo(0, 0);
 
     if (!fromRestore) {
         saveProgress(0, true); // Immediate save on chapter load
@@ -557,13 +558,13 @@ async function startLiveTTS() {
             // User came back, scroll to current sentence
             const currentEl = document.querySelector('.sentence.playing');
             if (currentEl) {
-                currentEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+                currentEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
             } else if (currentIndex < sentenceElements.length) {
                 // If no element has class (because we skipped updates), find by index
                 const el = sentenceElements[currentIndex];
                 document.querySelectorAll('.sentence.playing').forEach(e => e.classList.remove('playing'));
                 el.classList.add('playing');
-                el.scrollIntoView({ behavior: 'auto', block: 'center' });
+                el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
             }
         }
     });
@@ -672,7 +673,7 @@ async function startLiveTTS() {
                 sentenceEl.classList.add('playing');
                 const rect = sentenceEl.getBoundingClientRect();
                 if (rect.top < 0 || rect.bottom > window.innerHeight) {
-                    sentenceEl.scrollIntoView({ behavior: 'auto', block: 'center' });
+                    sentenceEl.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
                 }
             }
         }
@@ -798,71 +799,108 @@ function setSleepTimer(minutes) {
 
     if (minutes === null) {
         showToast("Đã hủy hẹn giờ tắt.", "success");
-        btn.classList.remove('active-timer');
-        if (countdownEl) countdownEl.style.display = 'none';
+    } else if (minutes === 'chapter') {
+        stopAtEndOfChapter = true;
+        btn.classList.add('active-timer');
+        countdownEl.style.display = 'block';
+        countdownTimeEl.textContent = 'Hết chương';
+        showToast("Sẽ tắt khi hết chương này.", "success");
+    } else {
+        const ms = minutes * 60 * 1000;
+        sleepTimer = setTimeout(() => {
+            isPlaying = false;
+            audioPlayer.pause();
+            document.querySelectorAll('.sentence.playing').forEach(el => el.classList.remove('playing'));
+            document.getElementById('speakBtn').innerHTML = '<span>🔊</span> Đọc Ngay';
+            btn.classList.remove('active-timer');
+            countdownEl.style.display = 'none';
+            showToast("Đã tắt theo hẹn giờ.", "success");
+        }, ms);
+
+        btn.classList.add('active-timer');
+        countdownEl.style.display = 'block';
+
+        // Countdown display
+        let remaining = minutes * 60;
+        const updateCountdown = () => {
+            const m = Math.floor(remaining / 60);
+            const s = remaining % 60;
+            countdownTimeEl.textContent = `${m}:${s.toString().padStart(2, '0')}`;
+            if (remaining > 0) {
+                remaining--;
+            } else {
+                clearInterval(sleepTimerInterval);
+            }
+        };
+        updateCountdown();
+        sleepTimerInterval = setInterval(updateCountdown, 1000);
+
+        showToast(`Đã hẹn giờ tắt sau ${minutes} phút.`, "success");
+    }
+}
+
+// Cloud Sync Functions
+async function saveToCloud() {
+    const key = document.getElementById('syncKeyInput').value.trim();
+    if (!key) {
+        showToast("Vui lòng nhập mã đồng bộ!", "error");
         return;
     }
 
-    btn.classList.add('active-timer');
+    const progressData = getStorage('readingProgress');
+    if (!progressData) {
+        showToast("Chưa có dữ liệu để lưu!", "warning");
+        return;
+    }
 
-    if (minutes === 'chapter') {
-        stopAtEndOfChapter = true;
-        showToast("Sẽ dừng sau khi hết chương này.", "success");
-        if (countdownEl) {
-            countdownEl.style.display = 'block';
-            countdownTimeEl.textContent = 'Hết chương';
+    try {
+        showToast("Đang lưu lên mây...", "warning");
+        const resp = await fetch('/api/sync/save', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key, data: JSON.parse(progressData) })
+        });
+        const result = await resp.json();
+        if (resp.ok) {
+            showToast("✅ Lưu thành công!", "success");
+        } else {
+            throw new Error(result.error || "Lỗi không xác định");
         }
-    } else {
-        const ms = minutes * 60 * 1000;
-        let remainingSeconds = minutes * 60;
-
-        showToast(`Sẽ dừng phát sau ${minutes} phút.`, "success");
-
-        // Show and update countdown display
-        if (countdownEl) {
-            countdownEl.style.display = 'block';
-
-            // Update countdown every second
-            const updateCountdown = () => {
-                const mins = Math.floor(remainingSeconds / 60);
-                const secs = remainingSeconds % 60;
-                countdownTimeEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-                remainingSeconds--;
-
-                if (remainingSeconds < 0) {
-                    clearInterval(sleepTimerInterval);
-                    sleepTimerInterval = null;
-                    countdownEl.style.display = 'none';
-                }
-            };
-
-            // Initial display
-            updateCountdown();
-
-            // Update every second
-            sleepTimerInterval = setInterval(updateCountdown, 1000);
-        }
-
-        sleepTimer = setTimeout(() => {
-            if (isPlaying) {
-                console.log("Sleep Timer: Time reached. Stopping playback.");
-                isPlaying = false;
-                audioPlayer.pause();
-                document.querySelectorAll('.sentence.playing').forEach(el => el.classList.remove('playing'));
-                document.getElementById('speakBtn').innerHTML = '<span>🔊</span> Đọc Ngay';
-                document.getElementById('status').textContent = '';
-                showToast("Đã dừng phát theo hẹn giờ.", "success");
-            }
-            btn.classList.remove('active-timer');
-            if (countdownEl) countdownEl.style.display = 'none';
-            if (sleepTimerInterval) {
-                clearInterval(sleepTimerInterval);
-                sleepTimerInterval = null;
-            }
-            sleepTimer = null;
-        }, ms);
+    } catch (err) {
+        console.error(err);
+        showToast("❌ Lỗi: " + err.message, "error");
     }
 }
+
+async function loadFromCloud() {
+    const key = document.getElementById('syncKeyInput').value.trim();
+    if (!key) {
+        showToast("Vui lòng nhập mã đồng bộ!", "error");
+        return;
+    }
+
+    if (!confirm("Dữ liệu hiện tại trên máy sẽ bị ghi đè. Bạn có chắc chắn không?")) return;
+
+    try {
+        showToast("Đang tải dữ liệu...", "warning");
+        const resp = await fetch(`/api/sync/load/${encodeURIComponent(key)}`);
+        const result = await resp.json();
+
+        if (resp.ok) {
+            setStorage('readingProgress', JSON.stringify(result.data));
+            showToast("✅ Tải thành công! Đang tải lại...", "success");
+            setTimeout(() => {
+                window.location.reload();
+            }, 1000);
+        } else {
+            throw new Error(result.error || "Lỗi không xác định");
+        }
+    } catch (err) {
+        console.error(err);
+        showToast("❌ Lỗi: " + err.message, "error");
+    }
+}
+
 
 // Close sleep timer modal on outside click
 document.getElementById('sleepTimerModal').addEventListener('click', (e) => {
@@ -884,7 +922,7 @@ function toggleAutoScroll() {
             const sentences = document.querySelectorAll('.sentence');
             if (sentences[currentIndex]) {
                 sentences[currentIndex].classList.add('playing');
-                sentences[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'center' });
+                sentences[currentIndex].scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
             }
         }
     } else {
@@ -961,7 +999,12 @@ function showSentenceSelector() {
     html += '<div class="modal-footer">';
     html += '<button class="modal-btn modal-btn-secondary" onclick="backToStartOptions()">« Quay lại</button>';
     html += '</div>';
-
+    setTimeout(() => {
+        const activeElement = document.querySelector('.sentence-option.selected');
+        if (activeElement) {
+            activeElement.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        }
+    }, 300);
     modalBody.innerHTML = html;
 }
 
@@ -998,6 +1041,11 @@ document.addEventListener('click', (e) => {
         hideStartModal();
         backToStartOptions();
     }
+
+    const modal2 = document.getElementById('libraryModal');
+    if (e.target === modal2) {
+        closeLibraryModal();
+    }
 });
 
 function scrollToCurrentSentence() {
@@ -1013,7 +1061,7 @@ function scrollToCurrentSentence() {
     }
 
     if (target) {
-        target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        target.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
         // Flash effect
         const originalBg = target.style.backgroundColor;
         target.style.backgroundColor = '#fde047'; // Yellow flash

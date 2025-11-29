@@ -19,13 +19,18 @@ app.use(express.urlencoded({ limit: "50mb", extended: true }));
 app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "public", "listen.html"));
 });
+app.get("/audio", (req, res) => {
+    res.sendFile(path.join(__dirname, "public", "audio_player.html"));
+});
 
 app.use(express.static(path.join(__dirname, "public")));
 app.use("/audio", express.static(path.join(__dirname, "output"))); // Serve audio files
 
 import ttsLiveRoute from "./routes/ttsLive.js";
+import syncRoute from "./routes/sync.js";
 
 app.use("/api", ttsLiveRoute);
+app.use("/api", syncRoute);
 
 
 

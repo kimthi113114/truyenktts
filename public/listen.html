@@ -18,35 +18,42 @@
 </head>
 
 <body>
-    <div class="sidebar" id="sidebar">
-        <div class="sidebar-header">
-            <div style="display:grid;grid-template-columns:3fr 1fr;gap:10px">
-                <h2>📚 Thư Viện</h2>
-                <!-- <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button> -->
+    <!-- Library Modal -->
+    <div class="modal-overlay" id="libraryModal">
+        <div class="modal">
+            <div class="modal-header">
+                <h3>📚 Thư Viện</h3>
+                <button onclick="closeLibraryModal()"
+                    style="background:none;border:none;color:white;font-size:1.5rem;cursor:pointer">&times;</button>
             </div>
-            <select id="storySelect" class="story-select" onchange="onStoryChange(this.value)">
-                <option value="">-- Chọn truyện --</option>
-            </select>
-        </div>
-        <div class="chapter-list" id="chapterList">
-            <div style="text-align:center;padding:20px;color:#6b7280">Vui lòng chọn truyện để xem danh sách chương</div>
-        </div>
-        <div id="info" class="info">
-            <img src="icon/favico.png" alt="" style="width:50px;height:50px">
-            <span>Truyện K-TTS</span>
-            <i>version 1.0.6</i>
+            <div style="margin-bottom: 20px; margin-top: 10px; margin-left: 10px; margin-right: 10px;">
+                <select id="storySelect" class="story-select" onchange="onStoryChange(this.value)"
+                    style="width:100%; color: var(--text-dark); background: var(--bg-color); border: 1px solid var(--sidebar-border);">
+                    <option value="">-- Chọn truyện --</option>
+                </select>
+            </div>
+            <div class="modal-body">
+                <div class="chapter-list" id="chapterList">
+                    <div style="text-align:center;padding:20px;color:#6b7280">Vui lòng chọn truyện để xem danh sách
+                        chương</div>
+                </div>
+            </div>
+            <div id="info" class="info">
+                <img src="icon/favico.png" alt="" style="width:50px;height:50px">
+                <span style="display:block;font-weight:600">Truyện K-TTS</span>
+                <i style="font-size:0.8rem">version 1.1.7</i>
+            </div>
         </div>
     </div>
 
     <div class="main-content">
         <div class="top-bar">
-            <button class="toggle-sidebar" onclick="toggleSidebar()">☰</button>
+            <button class="toggle-sidebar" onclick="openLibraryModal()">📚</button>
             <h6 id="currentChapterTitle" style="font-weight:600;color:var(--text-dark)">Chưa chọn chương</h6>
             <div style="display:flex;gap:10px">
+                <a href="audio" class="nav-btn" title="Trình phát"
+                    style="text-decoration:none;display:flex;align-items:center;justify-content:center">🎧</a>
                 <button class="nav-btn" onclick="openSettingsModal()" title="Cài đặt">⚙️</button>
-                <link
-                    href="https://fonts.googleapis.com/css2?family=Gilda+Display&family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&family=Spectral:wght@400;600;700&display=swap"
-                    rel="stylesheet">
             </div>
         </div>
         <div class="reading-area" id="readingArea" onclick="toggleTTSControls()">
@@ -70,7 +77,6 @@
                     <option value="it-IT-GiuseppeMultilingualNeural">Giuseppe (Nam)</option>
                     <option value="ko-KR-HyunsuMultilingualNeural">Hyunsu (Nam)</option>
                     <option value="pt-BR-ThalitaMultilingualNeural">Thalita (Nữ)</option>
-
                 </select>
                 <select id="ttsSpeed" onchange="onChangeSetting('speed', this.value)">
                     <option value="0.8">0.8x</option>
@@ -104,7 +110,6 @@
         </div>
     </div>
 
-    <!-- <button class="tts-toggle" id="ttsToggle" onclick="toggleTTSControls()" title="Ẩn/Hiện điều khiển">🔧</button> -->
     <div class="toast" id="toast">
         <span class="toast-icon">✅</span>
         <span class="toast-message">Thông báo</span>
@@ -116,7 +121,7 @@
             <div class="modal-header">
                 <h3>🔊 Bắt đầu phát</h3>
             </div>
-            <div class="modal-body-overflow-y-hidden" id="modalBody">
+            <div class="modal-body" id="modalBody">
                 <div class="modal-option" onclick="selectStartOption('continue')">
                     <h4>📍 Tiếp tục từ câu đã lưu</h4>
                     <p id="savedPositionText">Tiếp tục từ câu đã đọc trước đó</p>
@@ -139,6 +144,21 @@
             </div>
             <div class="modal-body">
                 <div class="settings-section">
+                    <h4>☁️ Đồng bộ đám mây</h4>
+                    <div style="display:flex;gap:10px;margin-bottom:10px">
+                        <input type="text" id="syncKeyInput" placeholder="Nhập mã đồng bộ (VD: ten-cua-ban)"
+                            style="flex:1">
+                    </div>
+                    <div style="display:flex;gap:10px">
+                        <button class="nav-btn" onclick="saveToCloud()" style="flex:1">⬆️ Lưu lên mây</button>
+                        <button class="nav-btn" onclick="loadFromCloud()" style="flex:1">⬇️ Tải về máy</button>
+                    </div>
+                    <p style="font-size:0.8rem;color:var(--text-light);margin-top:5px">
+                        * Nhập một mã bí mật để lưu và tải lại tiến trình đọc của bạn trên thiết bị khác.
+                    </p>
+                </div>
+
+                <div class="settings-section">
                     <h4>🎨 Giao diện</h4>
                     <div class="theme-options">
                         <div class="theme-option light" onclick="setTheme('light')">Sáng</div>
@@ -147,6 +167,7 @@
                         <div class="theme-option modern" onclick="setTheme('modern')">Hiện đại</div>
                     </div>
                 </div>
+
                 <div class="settings-section">
                     <h4>🔤 Font chữ</h4>
                     <select id="fontSelect" onchange="setFont(this.value)" style="width:100%">
@@ -154,7 +175,6 @@
                         <option value="'Merriweather', serif">Merriweather (Có chân)</option>
                         <option value="'Roboto', sans-serif">Roboto</option>
                         <option value="'Patrick Hand', cursive">Viết tay</option>
-
                         <option value="'Avenir Next', -apple-system, sans-serif">Avenir Next</option>
                         <option value="'Canela', 'Gilda Display', serif">Canela</option>
                         <option value="'Charter', 'Bitstream Charter', Georgia, serif">Charter</option>
@@ -168,8 +188,8 @@
                         <option value="'New York', 'Times New Roman', serif">New York</option>
                         <option value="'Seravek', 'Avenir Next', -apple-system, sans-serif">Seravek</option>
                     </select>
-
                 </div>
+
                 <div class="settings-section">
                     <h4>Aa Kích thước chữ</h4>
                     <div class="font-size-controls">

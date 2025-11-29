@@ -1,0 +1,5 @@
+CREATE TABLE IF NOT EXISTS reading_progress (
+    sync_key VARCHAR(255) PRIMARY KEY,
+    data JSONB NOT NULL,
+    last_updated TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
