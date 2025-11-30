@@ -3,6 +3,7 @@ import { EdgeTTS } from "node-edge-tts";
 import fs from "fs";
 import path from "path";
 import os from "os";
+import getMp3Duration from "get-mp3-duration";
 
 const router = express.Router();
 
@@ -114,41 +115,55 @@ router.post("/tts-live-stream", async (req, res) => {
 
         if (!text) return res.status(400).json({ error: "Text is required" });
 
-        // Cấu hình Header để Stream dữ liệu
+        // Cấu hình Header để Stream dữ liệu JSON từng dòng về client
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Transfer-Encoding', 'chunked');
 
-        // 1. Sanitize & Config
-        const sanitizedText = text.replace(/["'`«»""'']/g, '').replace(/:/g, ',').replace(/\s+/g, ' ').trim();
+        // 1. Xử lý input
+        const sanitizedText = text
+            .replace(/["'`«»""'']/g, '') // Bỏ ngoặc đặc biệt
+            .replace(/\s+/g, ' ')         // Xóa khoảng trắng thừa
+            .trim();
+
+        // Convert speed sang định dạng của EdgeTTS (VD: +20%, -10%)
         const speedPercent = Math.round((speed - 1) * 100);
         const rateStr = speedPercent >= 0 ? `+${speedPercent}%` : `${speedPercent}%`;
 
-        // 2. Split text
-        const chunks = splitText(sanitizedText, 200);
+        // 2. Chia nhỏ text (Sử dụng hàm thông minh ở trên)
+        const chunks = splitText(sanitizedText, 150); // 150 ký tự là đẹp cho 1 dòng sub
         const totalChunks = chunks.length;
-        let completedChunks = 0; // Biến đếm tiến độ
+        let completedChunks = 0;
 
-        // Hàm xử lý từng chunk
+        // Hàm xử lý từng chunk: Tạo Audio -> Đọc Buffer -> Xóa file tạm
         const processChunk = async (chunk, index) => {
             if (!chunk.trim()) return null;
 
-            const tempFile = path.join(os.tmpdir(), `tts_live_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}.mp3`);
-            let retries = 10;
+            // Tạo tên file tạm ngẫu nhiên để tránh trùng lặp
+            const tempFileName = `tts_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}.mp3`;
+            const tempFile = path.join(os.tmpdir(), tempFileName);
+
+            let retries = 3; // Thử lại tối đa 3 lần nếu lỗi mạng
             let lastError;
 
             while (retries > 0) {
                 try {
+                    // --- GỌI TTS ---
                     const tts = new EdgeTTS({ voice, rate: rateStr, volume: "+0%" });
                     await tts.ttsPromise(chunk, tempFile);
-                    await new Promise(r => setTimeout(r, 100));
+
+                    // Đợi một chút để file chắc chắn được ghi xong (an toàn cho hệ điều hành)
+                    await new Promise(r => setTimeout(r, 50));
+
+                    // Đọc file thành Buffer
                     const buffer = await fs.promises.readFile(tempFile);
+
+                    // Xóa file tạm ngay sau khi đọc
                     await fs.promises.unlink(tempFile).catch(() => { });
 
-                    // --- CẬP NHẬT TIẾN ĐỘ ---
+                    // --- BÁO CÁO TIẾN ĐỘ ---
                     completedChunks++;
                     const percent = Math.round((completedChunks / totalChunks) * 100);
-
-                    // Gửi dòng JSON về client: {"type": "progress", "val": 50}
+                    // Gửi progress về client
                     res.write(JSON.stringify({ type: 'progress', val: percent }) + '\n');
 
                     return buffer;
@@ -158,32 +173,63 @@ router.post("/tts-live-stream", async (req, res) => {
                     if (retries > 0) await new Promise(r => setTimeout(r, 1000));
                 }
             }
+
+            // Dọn dẹp nếu thất bại
             if (fs.existsSync(tempFile)) await fs.promises.unlink(tempFile).catch(() => { });
-            throw lastError || new Error(`Failed to generate chunk ${index}`);
+            console.error(`Error chunk ${index}:`, lastError);
+            return null; // Trả về null nếu chunk này lỗi, nhưng không dừng toàn bộ process
         };
 
-        // 3. Chạy song song
+        // 3. Chạy song song (Promise.all) để tối ưu tốc độ
+        // Lưu ý: Map giữ đúng thứ tự mảng, nên Audio ghép lại sẽ đúng thứ tự
         const buffers = await Promise.all(chunks.map((chunk, i) => processChunk(chunk, i)));
 
-        // 4. Kết thúc: Gửi dữ liệu Audio cuối cùng
-        const validBuffers = buffers.filter(b => b !== null);
+        // 4. Ghép Audio và Tạo Subtitle
+        const validBuffers = [];
+        const subtitles = [];
+        let currentTimestamp = 0; // Thời gian tính bằng ms
+
+        buffers.forEach((buffer, index) => {
+            if (buffer) {
+                validBuffers.push(buffer);
+
+                // --- QUAN TRỌNG: TÍNH DURATION ---
+                const durationMs = getMp3Duration(buffer);
+
+                // Đẩy vào mảng subtitle
+                subtitles.push({
+                    text: chunks[index],
+                    start: currentTimestamp / 1000,          // Giây bắt đầu
+                    end: (currentTimestamp + durationMs) / 1000 // Giây kết thúc
+                });
+
+                currentTimestamp += durationMs;
+            }
+        });
+
+        // Nối tất cả buffer thành 1 file duy nhất
         const finalBuffer = Buffer.concat(validBuffers);
         const base64Audio = finalBuffer.toString('base64');
 
-        // Gửi dòng JSON cuối cùng: {"type": "done", "audio": "..."}
+        // 5. Gửi kết quả cuối cùng
         res.write(JSON.stringify({
             type: 'done',
             audio: base64Audio,
-            mimeType: 'audio/mpeg'
+            mimeType: 'audio/mpeg',
+            subtitles: subtitles // Trả về mảng subtitle cho client dùng
         }) + '\n');
 
-        res.end(); // Đóng kết nối
+        res.end(); // Kết thúc stream
 
     } catch (err) {
-        console.error("TTS Live error:", err);
-        // Nếu lỗi xảy ra giữa chừng, gửi event lỗi
-        if (!res.headersSent) res.status(500).json({ error: err.message });
-        else res.end(JSON.stringify({ type: 'error', msg: err.message }));
+        console.error("TTS Live Stream Error:", err);
+        // Nếu lỗi xảy ra khi đang stream, gửi json error
+        if (!res.headersSent) {
+            res.status(500).json({ error: err.message });
+        } else {
+            res.write(JSON.stringify({ type: 'error', msg: err.message }) + '\n');
+            res.end();
+        }
     }
 });
 
