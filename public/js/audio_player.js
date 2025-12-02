@@ -4,14 +4,22 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================
     let currentStoryId = null;
     let currentChapterId = null;
-    let currentChapters = {}; // { id: { title, content } }
+    let currentChapters = {};
     let isPlaying = false;
     let audioPlayer = new Audio();
+
+    // CONFIG CHO IOS
+    audioPlayer.preload = 'none';
+
+    // QUẢN LÝ REQUEST (Tách biệt Play và Preload để tránh ngắt nhạc)
+    let playFetchController = null;
+    let preloadFetchController = null;
 
     // Preload & Cache
     let nextChapterData = null;
     let nextChapterId = null;
     let currentMetadataHandler = null;
+    let savedStartTime = 0;
 
     // Timer & Settings
     let saveInterval = null;
@@ -25,9 +33,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Waveform
     let waveformData = [];
     const BAR_COUNT = 60;
+    let lastDrawPercent = -1; // Biến tối ưu vẽ waveform
 
     // ==========================================================
-    // 2. LẤY CÁC ELEMENT TỪ HTML (AN TOÀN)
+    // 2. LẤY CÁC ELEMENT TỪ HTML 
     // ==========================================================
     const els = {
         storySelect: document.getElementById('storySelect'),
@@ -39,14 +48,9 @@ document.addEventListener('DOMContentLoaded', () => {
         pauseIcon: document.getElementById('pauseIcon'),
         trackTitle: document.getElementById('currentTrackTitle'),
         storyTitle: document.getElementById('currentStoryTitle'),
-
-        // UI Subtitle
         toggleLyricsBtn: document.getElementById('toggleLyricsBtn'),
         subtitleContainer: document.getElementById('subtitleContainer'),
         albumArt: document.getElementById('albumArt'),
-        trackInfo: document.querySelector('.track-info'),
-
-        // UI Khác
         waveformCanvas: document.getElementById('waveformCanvas'),
         currentTime: document.getElementById('currentTime'),
         totalTime: document.getElementById('totalTime'),
@@ -56,8 +60,6 @@ document.addEventListener('DOMContentLoaded', () => {
         toast: document.getElementById('toast'),
         progressContainer: document.querySelector('.progress-container'),
         loadingText: document.getElementById('loadingText'),
-
-        // Timer Elements
         sleepTimerBtn: document.getElementById('sleepTimerBtn'),
         sleepTimerLabel: document.getElementById('sleepTimerLabel'),
         sleepTimerModal: document.getElementById('sleepTimerModal'),
@@ -66,18 +68,14 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // ==========================================================
-    // 3. HÀM INIT (CHẠY ĐẦU TIÊN)
+    // 3. HÀM INIT
     // ==========================================================
     async function init() {
-        // Kiểm tra tối thiểu: Nếu không có nút Play hoặc Select truyện thì dừng
-        if (!els.playBtn || !els.storySelect) {
-            console.error("Thiếu HTML quan trọng (playBtn hoặc storySelect). Kiểm tra lại file HTML.");
-            return;
-        }
+        if (!els.playBtn || !els.storySelect) return;
 
+        loadSettings();
         showLoading(true);
         try {
-            // Tải danh sách truyện
             const resp = await fetch('/api/stories-listen');
             if (resp.ok) {
                 const stories = await resp.json();
@@ -88,10 +86,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     els.storySelect.appendChild(option);
                 });
             }
-
-            // Khôi phục tiến trình cũ
             await loadProgress();
-
         } catch (err) {
             showToast('Lỗi kết nối server', 'error');
             console.error(err);
@@ -99,140 +94,149 @@ document.addEventListener('DOMContentLoaded', () => {
             showLoading(false);
         }
 
-        // --- GÁN SỰ KIỆN (EVENT LISTENERS) ---
-
-        // 1. Controls cơ bản
+        // --- GÁN SỰ KIỆN ---
         els.storySelect.addEventListener('change', (e) => loadStory(e.target.value));
+
         els.chapterSelect.addEventListener('change', (e) => {
-            if (e.target.value) playChapter(parseInt(e.target.value));
+            if (e.target.value) {
+                savedStartTime = 0;
+                playChapter(parseInt(e.target.value));
+            }
         });
 
         els.playBtn.addEventListener('click', togglePlay);
         if (els.prevBtn) els.prevBtn.addEventListener('click', prevChapter);
         if (els.nextBtn) els.nextBtn.addEventListener('click', nextChapter);
 
-        // 2. Lyrics Toggle
-        if (els.toggleLyricsBtn) {
-            els.toggleLyricsBtn.addEventListener('click', toggleLyricsView);
-        }
-        if (els.albumArt) {
-            els.albumArt.addEventListener('click', toggleLyricsView);
+        if (els.speedSelect) {
+            els.speedSelect.addEventListener('change', () => {
+                if (currentChapterId) {
+                    let currentPercent = 0;
+                    if (audioPlayer.duration > 0) {
+                        currentPercent = audioPlayer.currentTime / audioPlayer.duration;
+                    }
+                    const wasPlaying = isPlaying;
+                    playChapter(currentChapterId, 0, currentPercent).then(() => {
+                        if (!wasPlaying) audioPlayer.pause();
+                    });
+                    saveSettings();
+                }
+            });
         }
 
-        // 3. Audio Events
+        if (els.voiceSelect) {
+            els.voiceSelect.addEventListener('change', () => saveSettings());
+        }
+
+        if (els.toggleLyricsBtn) els.toggleLyricsBtn.addEventListener('click', toggleLyricsView);
+        if (els.albumArt) els.albumArt.addEventListener('click', toggleLyricsView);
+
+        // --- AUDIO EVENTS QUAN TRỌNG ---
         audioPlayer.addEventListener('timeupdate', updateProgress);
         audioPlayer.addEventListener('loadedmetadata', () => {
             if (els.totalTime) els.totalTime.textContent = formatTime(audioPlayer.duration);
         });
         audioPlayer.addEventListener('ended', onAudioEnded);
-        audioPlayer.addEventListener('pause', () => saveProgress(true));
-        audioPlayer.addEventListener('error', (e) => {
-            console.error("Audio error", e);
-            showToast('Lỗi phát audio', 'error');
-            stopPlayback();
+
+        // Fix iOS UI Sync: Khi hệ thống tự pause (do cuộc gọi), cập nhật UI
+        audioPlayer.addEventListener('pause', () => {
+            isPlaying = false;
+            updatePlayButton();
+            saveProgress(true);
+        });
+        audioPlayer.addEventListener('play', () => {
+            isPlaying = true;
+            updatePlayButton();
         });
 
-        // 4. Seek (Tua)
+        audioPlayer.addEventListener('error', (e) => {
+            // Không show toast lỗi nếu là do abort chủ động
+            if (audioPlayer.error && audioPlayer.error.code !== 20) {
+                console.error("Audio error event:", e);
+            }
+            isPlaying = false;
+            updatePlayButton();
+        });
+
         if (els.progressContainer) {
             els.progressContainer.addEventListener('click', (e) => {
-                if (!audioPlayer.duration) return;
                 const rect = els.progressContainer.getBoundingClientRect();
                 const percent = (e.clientX - rect.left) / rect.width;
-                audioPlayer.currentTime = percent * audioPlayer.duration;
-                if (els.waveformCanvas) drawWaveform(percent);
+                if (!audioPlayer.src || audioPlayer.src === '') {
+                    if (currentChapterId && currentChapters[currentChapterId]) {
+                        playChapter(currentChapterId, 0);
+                        return;
+                    }
+                }
+                if (audioPlayer.duration) {
+                    audioPlayer.currentTime = percent * audioPlayer.duration;
+                    if (els.waveformCanvas) drawWaveform(percent);
+                }
             });
         }
 
-        // 5. Setup Timer & Auto Save
         setupTimerUI();
         saveInterval = setInterval(() => {
             if (isPlaying) saveProgress();
             checkSleepTimer();
         }, 1000);
 
-        // 6. Init Waveform
         if (els.waveformCanvas) initWaveform();
 
-        // 7. Visibility Change (Fix lỗi UI khi mở lại tab)
+        // Fix iOS: Update UI khi quay lại tab
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible' && audioPlayer.duration) {
-                updateProgress();
+            if (document.visibilityState === 'visible') {
                 updatePlayButton();
             }
         });
-
-        // 8. Auto Save khi tắt tab
         window.addEventListener('beforeunload', () => saveProgress(true));
     }
 
     // ==========================================================
-    // 4. LOGIC SUBTITLE / LYRICS
+    // 4. HỒI SỨC CẤP CỨU (RECOVERY LOGIC) - QUAN TRỌNG
     // ==========================================================
-    function toggleLyricsView() {
-        if (!els.subtitleContainer || !els.albumArt) return;
+    async function recoverAndPlay() {
+        console.log("🚑 Kích hoạt hồi sức cấp cứu...");
+        showLoading(true);
 
-        const isLyricsVisible = els.subtitleContainer.style.display === 'block';
-        if (isLyricsVisible) {
-            els.subtitleContainer.style.display = 'none';
-            els.albumArt.classList.remove('hidden');
-            if (els.toggleLyricsBtn) els.toggleLyricsBtn.classList.remove('active');
-        } else {
-            els.albumArt.classList.add('hidden');
-            els.subtitleContainer.style.display = 'block';
-            if (els.toggleLyricsBtn) els.toggleLyricsBtn.classList.add('active');
-            scrollToActiveLine();
-        }
-    }
+        // Lưu thời điểm cần resume
+        let resumeTime = audioPlayer.currentTime > 0 ? audioPlayer.currentTime : savedStartTime;
 
-    function renderSubtitles(subtitles) {
-        if (!els.subtitleContainer) return;
-        els.subtitleContainer.innerHTML = '';
+        try {
+            // --- CÁCH 1: THỬ LOAD LẠI SOURCE CŨ ---
+            // Chỉ thành công nếu Blob chưa bị xóa khỏi RAM
+            console.log("Thử cách 1: Reload source cũ...");
+            audioPlayer.load();
 
-        // Padding trên dưới để dễ đọc
-        const pStart = document.createElement('div'); pStart.style.height = '100px';
-        els.subtitleContainer.appendChild(pStart);
-
-        subtitles.forEach((sub, index) => {
-            const p = document.createElement('p');
-            p.className = 'sub-line';
-            p.textContent = sub.text;
-            p.dataset.index = index;
-            p.addEventListener('click', () => {
-                // Click vào dòng chữ để tua
-                audioPlayer.currentTime = sub.start;
-                updateProgress();
+            await new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error("Timeout")), 3000);
+                audioPlayer.onloadedmetadata = () => { clearTimeout(timer); resolve(); };
+                audioPlayer.onerror = (e) => { clearTimeout(timer); reject(e); };
             });
-            els.subtitleContainer.appendChild(p);
-        });
 
-        const pEnd = document.createElement('div'); pEnd.style.height = '100px';
-        els.subtitleContainer.appendChild(pEnd);
+            audioPlayer.currentTime = resumeTime;
+            await audioPlayer.play();
+            console.log("✅ Hồi sức cách 1 thành công!");
+            isPlaying = true;
+            updatePlayButton();
 
-        // Reset active index
-        activeSubtitleIndex = -1;
-    }
+        } catch (e) {
+            // --- CÁCH 2: TẢI LẠI TỪ SERVER ---
+            // Nếu Blob bị xóa (do tắt máy lâu/cuộc gọi), phải fetch lại file mới
+            console.warn("⚠️ Cách 1 thất bại. Chuyển sang Cách 2: Tải lại từ server...", e);
 
-    function highlightSubtitle(index) {
-        if (index === activeSubtitleIndex || !els.subtitleContainer) return;
-        activeSubtitleIndex = index;
-
-        const lines = els.subtitleContainer.querySelectorAll('.sub-line');
-        lines.forEach(l => l.classList.remove('active'));
-
-        if (lines[index]) {
-            lines[index].classList.add('active');
-            // Chỉ cuộn nếu đang mở tab lyrics
-            if (els.subtitleContainer.style.display === 'block') {
-                scrollToActiveLine();
+            if (currentChapterId) {
+                // playChapter sẽ tự động fetch lại và tua đến resumeTime
+                await playChapter(currentChapterId, resumeTime);
+                console.log("✅ Hồi sức cách 2 thành công!");
+            } else {
+                showToast('Không thể khôi phục. Vui lòng chọn lại chương.', 'error');
+                stopPlayback();
             }
-        }
-    }
-
-    function scrollToActiveLine() {
-        if (!els.subtitleContainer) return;
-        const activeLine = els.subtitleContainer.querySelector('.sub-line.active');
-        if (activeLine) {
-            activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        } finally {
+            audioPlayer.onloadedmetadata = null;
+            audioPlayer.onerror = null;
+            showLoading(false);
         }
     }
 
@@ -263,7 +267,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             els.chapterSelect.disabled = false;
             if (els.storyTitle) els.storyTitle.textContent = els.storySelect.options[els.storySelect.selectedIndex].text;
-            showToast('Đã tải xong truyện', 'success');
+            showToast('Đã tải truyện', 'success');
         } catch (err) {
             showToast('Lỗi tải truyện: ' + err.message, 'error');
         } finally {
@@ -285,78 +289,99 @@ document.addEventListener('DOMContentLoaded', () => {
         return chapters;
     }
 
-    async function playChapter(chapterId, startTime = 0) {
+    async function playChapter(chapterId, startTime = 0, startPercent = null) {
         if (!currentChapters[chapterId]) return;
 
         currentChapterId = chapterId;
         if (els.chapterSelect) els.chapterSelect.value = chapterId;
         if (els.trackTitle) els.trackTitle.textContent = `Chương ${chapterId}: ${currentChapters[chapterId].title}`;
 
-        if (els.prevBtn) els.prevBtn.disabled = false;
-        if (els.nextBtn) els.nextBtn.disabled = false;
         els.playBtn.disabled = false;
 
-        // --- PRELOAD LOGIC ---
-        if (nextChapterId === chapterId && nextChapterData && startTime === 0) {
+        // --- FIX IOS: Hack để giữ audio context ---
+        // Load rỗng ngay lập tức khi user tương tác
+        if (!audioPlayer.src || audioPlayer.src === '') {
+            audioPlayer.load();
+        }
+
+        let audioDataToPlay = null;
+
+        // 1. Check Preload Cache
+        if (nextChapterId === chapterId && nextChapterData && startPercent === null && startTime === 0) {
             console.log("Sử dụng cache preload");
-            currentSubtitles = nextChapterData.subtitles || [];
-            renderSubtitles(currentSubtitles);
-            startPlayback(nextChapterData.audioUrl);
-            nextChapterData = null; // Clear cache
+            audioDataToPlay = nextChapterData;
+            nextChapterData = null;
+            nextChapterId = null;
         } else {
-            // Tải mới
+            // 2. Fetch mới
             const fullText = `Chương ${chapterId}. ${currentChapters[chapterId].title}. \n ${currentChapters[chapterId].content}`;
             showLoading(true);
             try {
-                const result = await getAudioUrl(fullText, chapterId);
-                if (result && result.audioUrl) {
-                    currentSubtitles = result.subtitles || [];
-                    renderSubtitles(currentSubtitles);
-                    startPlayback(result.audioUrl, startTime);
-                } else {
-                    showToast('Không thể tạo audio', 'error');
-                }
+                // isPreload = false
+                const result = await getAudioUrl(fullText, chapterId, false);
+                if (result) audioDataToPlay = result;
             } catch (e) {
-                console.error(e);
-                showToast('Lỗi tạo audio', 'error');
+                if (e.name !== 'AbortError') {
+                    console.error(e);
+                    showToast('Lỗi tạo audio', 'error');
+                }
+                return;
             } finally {
                 showLoading(false);
             }
+        }
+
+        if (audioDataToPlay && audioDataToPlay.audioUrl) {
+            currentSubtitles = audioDataToPlay.subtitles || [];
+            renderSubtitles(currentSubtitles);
+            startPlayback(audioDataToPlay.audioUrl, startTime, startPercent);
         }
 
         preloadNextChapter(chapterId);
         setupMediaSession(chapterId);
     }
 
-    // --- API CALL (TTS) ---
-    async function getAudioUrl(text, currentLoadingChapterId) {
+    // --- FETCH API VÀ STREAMING ---
+    async function getAudioUrl(text, currentLoadingChapterId, isPreload = false) {
+        // 1. Xác định controller cần abort
+        if (isPreload) {
+            if (preloadFetchController) preloadFetchController.abort();
+            preloadFetchController = new AbortController();
+        } else {
+            if (playFetchController) playFetchController.abort();
+            playFetchController = new AbortController();
+        }
+
+        const signal = isPreload ? preloadFetchController.signal : playFetchController.signal;
         const voice = els.voiceSelect ? els.voiceSelect.value : "vi-VN-NamMinhNeural";
         const speed = els.speedSelect ? parseFloat(els.speedSelect.value) : 1.0;
 
-        const response = await fetch('/api/tts-live-stream', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, voice, speed })
-        });
+        try {
+            const response = await fetch('/api/tts-live-stream', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: text, voice, speed }),
+                signal: signal
+            });
 
-        if (!response.ok) throw new Error('TTS API Error');
+            if (!response.ok) throw new Error('TTS API Error');
 
-        const reader = response.body.getReader();
-        const decoder = new TextDecoder();
-        let buffer = '';
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
 
-        while (true) {
-            const { done, value } = await reader.read();
-            if (done) break;
-            buffer += decoder.decode(value, { stream: true });
-            const lines = buffer.split('\n');
-            buffer = lines.pop();
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done) break;
+                buffer += decoder.decode(value, { stream: true });
+                const lines = buffer.split('\n');
+                buffer = lines.pop();
 
-            for (const line of lines) {
-                if (!line.trim()) continue;
-                try {
+                for (const line of lines) {
+                    if (!line.trim()) continue;
                     const data = JSON.parse(line);
-                    if (data.type === 'progress') {
+
+                    if (data.type === 'progress' && !isPreload) {
                         if (els.loadingText) els.loadingText.textContent = `Đang tải: ${data.val}%`;
                     }
                     else if (data.type === 'done') {
@@ -367,18 +392,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         };
                     }
                     else if (data.type === 'error') throw new Error(data.msg);
-                } catch (e) {
-                    console.error("JSON Error", e);
                 }
+            }
+        } catch (e) {
+            if (e.name === 'AbortError') {
+                console.log(isPreload ? 'Hủy preload cũ...' : 'Hủy play cũ...');
+            }
+            throw e;
+        } finally {
+            if (isPreload && preloadFetchController && preloadFetchController.signal === signal) {
+                preloadFetchController = null;
+            } else if (!isPreload && playFetchController && playFetchController.signal === signal) {
+                playFetchController = null;
             }
         }
     }
 
-    // ==========================================================
-    // 6. CÁC HÀM PHỤ TRỢ (HELPER)
-    // ==========================================================
-
-    function startPlayback(url, startTime = 0) {
+    function startPlayback(url, startTime = 0, startPercent = null) {
+        // Fix Memory Leak: Revoke blob cũ
         if (audioPlayer.src && audioPlayer.src.startsWith('blob:') && audioPlayer.src !== url) {
             URL.revokeObjectURL(audioPlayer.src);
         }
@@ -388,36 +419,60 @@ document.addEventListener('DOMContentLoaded', () => {
 
         audioPlayer.src = url;
         currentMetadataHandler = () => {
-            audioPlayer.currentTime = startTime;
+            if (startPercent !== null) {
+                audioPlayer.currentTime = startPercent * audioPlayer.duration;
+            } else {
+                audioPlayer.currentTime = startTime;
+            }
+
             audioPlayer.play().then(() => {
                 isPlaying = true;
                 updatePlayButton();
                 updateProgress();
             }).catch(e => {
-                if (e.name !== 'AbortError') console.error("Play failed", e);
+                if (e.name !== 'AbortError') {
+                    console.error("Autoplay prevented:", e);
+                    // Có thể do iOS chặn -> Thử recover hoặc nhắc user
+                }
+                isPlaying = false;
+                updatePlayButton();
             });
         };
         audioPlayer.addEventListener('loadedmetadata', currentMetadataHandler, { once: true });
-        audioPlayer.load();
     }
 
+    // --- PLAY CONTROL SỬA ĐỔI ---
     function togglePlay() {
         if (isPlaying) {
             isPlaying = false;
             audioPlayer.pause();
+            updatePlayButton();
         } else {
+            // Kiểm tra trạng thái lỗi/rỗng trước khi play
+            if (audioPlayer.error || !audioPlayer.src || audioPlayer.networkState === 3) {
+                console.log("Source lỗi/rỗng -> Gọi Recover");
+                recoverAndPlay();
+                return;
+            }
+
             if (currentChapterId) {
-                if (audioPlayer.src) {
-                    audioPlayer.play();
-                    isPlaying = true;
-                } else {
-                    playChapter(currentChapterId);
+                // Thử Play bình thường
+                const playPromise = audioPlayer.play();
+                if (playPromise !== undefined) {
+                    playPromise
+                        .then(() => {
+                            isPlaying = true;
+                            updatePlayButton();
+                        })
+                        .catch(error => {
+                            console.warn("Play thường thất bại -> Gọi Recover", error);
+                            recoverAndPlay();
+                        });
                 }
             } else {
                 showToast('Vui lòng chọn chương', 'warning');
             }
         }
-        updatePlayButton();
     }
 
     function updatePlayButton() {
@@ -442,7 +497,6 @@ document.addEventListener('DOMContentLoaded', () => {
             if (els.waveformCanvas) drawWaveform(percent);
             if (els.currentTime) els.currentTime.textContent = formatTime(currentTime);
 
-            // Sync Subtitle
             if (currentSubtitles.length > 0) {
                 const index = currentSubtitles.findIndex(sub =>
                     currentTime >= sub.start && currentTime < sub.end
@@ -456,8 +510,6 @@ document.addEventListener('DOMContentLoaded', () => {
         isPlaying = false;
         audioPlayer.pause();
         updatePlayButton();
-        if (els.waveformCanvas) drawWaveform(0);
-        if (els.currentTime) els.currentTime.textContent = '0:00';
     }
 
     async function preloadNextChapter(currentId) {
@@ -467,14 +519,18 @@ document.addEventListener('DOMContentLoaded', () => {
             const nextId = sortedNums[idx + 1];
             if (nextChapterId === nextId && nextChapterData) return;
 
-            if (nextChapterData && nextChapterData.audioUrl) URL.revokeObjectURL(nextChapterData.audioUrl);
+            // FIX MEMORY LEAK: Revoke URL cũ
+            if (nextChapterData && nextChapterData.audioUrl) {
+                URL.revokeObjectURL(nextChapterData.audioUrl);
+            }
 
             nextChapterId = nextId;
             const fullText = `Chương ${nextId}. ${currentChapters[nextId].title}. \n ${currentChapters[nextId].content}`;
             try {
-                nextChapterData = await getAudioUrl(fullText, nextId);
+                // isPreload = true
+                nextChapterData = await getAudioUrl(fullText, nextId, true);
             } catch (e) {
-                console.warn("Preload failed", e);
+                if (e.name !== 'AbortError') console.warn("Preload failed", e);
                 nextChapterId = null;
                 nextChapterData = null;
             }
@@ -482,6 +538,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function nextChapter() {
+        savedStartTime = 0;
         const sortedNums = Object.keys(currentChapters).map(Number).sort((a, b) => a - b);
         const idx = sortedNums.indexOf(currentChapterId);
         if (idx < sortedNums.length - 1) {
@@ -493,6 +550,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function prevChapter() {
+        savedStartTime = 0;
         const sortedNums = Object.keys(currentChapters).map(Number).sort((a, b) => a - b);
         const idx = sortedNums.indexOf(currentChapterId);
         if (idx > 0) {
@@ -502,7 +560,9 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- UTILS ---
+    // ==========================================================
+    // 6. HELPER FUNCTIONS
+    // ==========================================================
     function base64ToBlob(base64, mimeType) {
         const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);
@@ -511,20 +571,17 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         return new Blob([new Uint8Array(byteNumbers)], { type: mimeType });
     }
-
     function formatTime(seconds) {
         const m = Math.floor(seconds / 60);
         const s = Math.floor(seconds % 60);
         return `${m}:${s.toString().padStart(2, '0')}`;
     }
-
     function showLoading(show) {
         if (els.loading) {
             if (show) els.loading.classList.add('active');
             else els.loading.classList.remove('active');
         }
     }
-
     function showToast(msg, type = 'info') {
         if (!els.toast) return;
         const icon = type === 'success' ? '✅' : (type === 'error' ? '❌' : '⚠️');
@@ -534,47 +591,131 @@ document.addEventListener('DOMContentLoaded', () => {
         setTimeout(() => els.toast.classList.remove('show'), 2000);
     }
 
+    // --- SETTINGS & STORAGE ---
     function saveProgress(force = false) {
         if (!currentStoryId || !currentChapterId) return;
+        const timeToSave = (audioPlayer.duration && audioPlayer.currentTime > 0)
+            ? audioPlayer.currentTime : savedStartTime;
         const state = {
             storyId: currentStoryId,
             chapterId: currentChapterId,
-            currentTime: audioPlayer.currentTime,
+            currentTime: timeToSave,
             timestamp: Date.now()
         };
-        try {
-            localStorage.setItem('audioPlayerProgress', JSON.stringify(state));
-        } catch (e) { }
+        try { localStorage.setItem('audioPlayerProgress', JSON.stringify(state)); } catch (e) { }
     }
-
+    function saveSettings() {
+        const settings = {
+            voice: els.voiceSelect ? els.voiceSelect.value : null,
+            speed: els.speedSelect ? els.speedSelect.value : null,
+            showLyrics: els.subtitleContainer ? (els.subtitleContainer.style.display === 'block') : false
+        };
+        try { localStorage.setItem('audioPlayerSettings', JSON.stringify(settings)); } catch (e) { }
+    }
+    function loadSettings() {
+        try {
+            const saved = localStorage.getItem('audioPlayerSettings');
+            if (!saved) return;
+            const settings = JSON.parse(saved);
+            if (settings.voice && els.voiceSelect) els.voiceSelect.value = settings.voice;
+            if (settings.speed && els.speedSelect) els.speedSelect.value = settings.speed;
+            if (typeof settings.showLyrics === 'boolean') {
+                if (settings.showLyrics) {
+                    if (els.subtitleContainer) els.subtitleContainer.style.display = 'block';
+                    if (els.albumArt) els.albumArt.classList.add('hidden');
+                    if (els.toggleLyricsBtn) els.toggleLyricsBtn.classList.add('active');
+                } else {
+                    if (els.subtitleContainer) els.subtitleContainer.style.display = 'none';
+                    if (els.albumArt) els.albumArt.classList.remove('hidden');
+                    if (els.toggleLyricsBtn) els.toggleLyricsBtn.classList.remove('active');
+                }
+            }
+        } catch (e) { console.error("Load settings error:", e); }
+    }
     async function loadProgress() {
         try {
             const saved = localStorage.getItem('audioPlayerProgress');
             if (!saved) return;
             const state = JSON.parse(saved);
             if (!state.storyId || !state.chapterId) return;
-
             els.storySelect.value = state.storyId;
-            if (els.storySelect.value !== state.storyId) return; // Truyện không còn tồn tại
-
+            if (els.storySelect.value !== state.storyId) return;
             await loadStory(state.storyId);
-
             els.chapterSelect.value = state.chapterId;
             if (parseInt(els.chapterSelect.value) !== state.chapterId) return;
-
-            showToast('Khôi phục tiến trình...', 'info');
-            await playChapter(state.chapterId, state.currentTime);
-            togglePlay(); // Pause lại, đợi người dùng bấm Play
+            currentChapterId = state.chapterId;
+            if (currentChapters[currentChapterId]) {
+                if (els.trackTitle) els.trackTitle.textContent = `Chương ${currentChapterId}: ${currentChapters[currentChapterId].title}`;
+            }
+            if (els.currentTime) els.currentTime.textContent = formatTime(state.currentTime);
+            savedStartTime = state.currentTime;
+            if (els.playBtn) els.playBtn.disabled = false;
+            if (els.prevBtn) els.prevBtn.disabled = false;
+            if (els.nextBtn) els.nextBtn.disabled = false;
+            showToast('Khôi phục phiên nghe cũ (Bấm Play để nghe)', 'info');
         } catch (e) { console.error(e); }
     }
 
-    // --- MEDIA SESSION ---
+    // --- UI PHỤ (LYRICS, TIMER, WAVEFORM) ---
+    function toggleLyricsView() {
+        if (!els.subtitleContainer || !els.albumArt) return;
+        const isLyricsVisible = els.subtitleContainer.style.display === 'block';
+        if (isLyricsVisible) {
+            els.subtitleContainer.style.display = 'none';
+            els.albumArt.classList.remove('hidden');
+            if (els.toggleLyricsBtn) els.toggleLyricsBtn.classList.remove('active');
+        } else {
+            els.albumArt.classList.add('hidden');
+            els.subtitleContainer.style.display = 'block';
+            if (els.toggleLyricsBtn) els.toggleLyricsBtn.classList.add('active');
+            scrollToActiveLine();
+        }
+        saveSettings();
+    }
+    function renderSubtitles(subtitles) {
+        if (!els.subtitleContainer) return;
+        els.subtitleContainer.innerHTML = '';
+        const pStart = document.createElement('div'); pStart.style.height = '100px';
+        els.subtitleContainer.appendChild(pStart);
+        subtitles.forEach((sub, index) => {
+            const p = document.createElement('p');
+            p.className = 'sub-line';
+            p.textContent = sub.text;
+            p.dataset.index = index;
+            p.addEventListener('click', () => {
+                if (audioPlayer.duration) {
+                    audioPlayer.currentTime = sub.start;
+                    updateProgress();
+                }
+            });
+            els.subtitleContainer.appendChild(p);
+        });
+        const pEnd = document.createElement('div'); pEnd.style.height = '100px';
+        els.subtitleContainer.appendChild(pEnd);
+        activeSubtitleIndex = -1;
+    }
+    function highlightSubtitle(index) {
+        if (index === activeSubtitleIndex || !els.subtitleContainer) return;
+        activeSubtitleIndex = index;
+        const lines = els.subtitleContainer.querySelectorAll('.sub-line');
+        lines.forEach(l => l.classList.remove('active'));
+        if (lines[index]) {
+            lines[index].classList.add('active');
+            if (els.subtitleContainer.style.display === 'block') scrollToActiveLine();
+        }
+    }
+    function scrollToActiveLine() {
+        if (!els.subtitleContainer) return;
+        const activeLine = els.subtitleContainer.querySelector('.sub-line.active');
+        if (activeLine) activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+
     function setupMediaSession(chapterId) {
         if ('mediaSession' in navigator) {
             navigator.mediaSession.metadata = new MediaMetadata({
                 title: `Chương ${chapterId}: ${currentChapters[chapterId].title}`,
                 artist: els.storySelect.options[els.storySelect.selectedIndex].text,
-                album: 'Truyện KTTS',
+                album: 'Truyện TTS',
                 artwork: [{ src: 'icon/favico.png', sizes: '512x512', type: 'image/png' }]
             });
             navigator.mediaSession.setActionHandler('play', togglePlay);
@@ -584,7 +725,6 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- TIMER UI ---
     function setupTimerUI() {
         if (!els.sleepTimerBtn) return;
         els.sleepTimerBtn.addEventListener('click', () => els.sleepTimerModal.style.display = 'flex');
@@ -627,7 +767,6 @@ document.addEventListener('DOMContentLoaded', () => {
         } else nextChapter();
     }
 
-    // --- WAVEFORM ---
     function initWaveform() {
         generateFakeWaveform();
         resizeCanvas();
@@ -651,6 +790,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     function drawWaveform(progress) {
         if (!els.waveformCanvas) return;
+        if (Math.abs(progress - lastDrawPercent) < 0.005) return;
+        lastDrawPercent = progress;
+
         const ctx = els.waveformCanvas.getContext('2d');
         const width = els.waveformCanvas.width / (window.devicePixelRatio || 1);
         const height = els.waveformCanvas.height / (window.devicePixelRatio || 1);
@@ -677,6 +819,5 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // CHẠY INIT
     init();
 });
