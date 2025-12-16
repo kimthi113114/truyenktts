@@ -12,14 +12,46 @@ let cachedNextSentences = [];
 let playbackSessionId = 0;
 
 // URL Management
+// URL Management
 function getStoryIdFromURL() {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('story');
+    const pathParts = window.location.pathname.split('/').filter(p => p);
+    // pathParts[0] is 'listen'
+    if (pathParts.length >= 2) {
+        return pathParts[1];
+    }
+    return null;
 }
 
-function updateURL(storyId) {
-    const newURL = storyId ? `?story=${encodeURIComponent(storyId)}` : window.location.pathname;
-    window.history.pushState({ storyId }, '', newURL);
+function getChapterIdFromURL() {
+    const pathParts = window.location.pathname.split('/').filter(p => p);
+    if (pathParts.length >= 3) {
+        return parseInt(pathParts[2]);
+    }
+    return null;
+}
+
+function updateURL(storyId, chapterId) {
+    let newURL = '/listen';
+    if (storyId) {
+        newURL += `/${encodeURIComponent(storyId)}`;
+        if (chapterId) {
+            newURL += `/${chapterId}`;
+        }
+    }
+    window.history.pushState({ storyId, chapterId }, '', newURL);
+
+    // Update Audio Link
+    const audioLink = document.querySelector('a[href^="/audio"]');
+    if (audioLink) {
+        let audioURL = '/audio';
+        if (storyId) {
+            audioURL += `/${encodeURIComponent(storyId)}`;
+            if (chapterId) {
+                audioURL += `/${chapterId}`;
+            }
+        }
+        audioLink.href = audioURL;
+    }
 }
 
 // Storage Management (LocalStorage for better performance)
@@ -42,7 +74,7 @@ let saveProgressTimeout = null;
 function saveProgress(sentenceIndex = 0, immediate = false) {
     if (!currentStoryId || !currentChapterId) return;
 
-    const doSave = () => {
+    const doSave = async () => {
         let allProgress = {};
         try {
             const stored = getStorage('readingProgress');
@@ -62,8 +94,22 @@ function saveProgress(sentenceIndex = 0, immediate = false) {
             sentenceIndex: sentenceIndex,
             timestamp: Date.now()
         };
-        setStorage('readingProgress', JSON.stringify(allProgress));
-        // console.log("Progress saved (debounced)");
+        const jsonStr = JSON.stringify(allProgress);
+        setStorage('readingProgress', jsonStr);
+
+        // Auto-sync to server if user is logged in
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+            try {
+                const user = JSON.parse(userStr);
+                // Don't wait for this, let it run in background
+                fetch('/api/sync/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ key: user.username, data: allProgress })
+                }).catch(e => console.warn("Auto-sync failed", e));
+            } catch (e) { }
+        }
     };
 
     if (immediate) {
@@ -189,13 +235,18 @@ async function init() {
         });
 
         const urlStoryId = getStoryIdFromURL();
+        const urlChapterId = getChapterIdFromURL();
         const progressStr = getStorage('readingProgress');
 
         if (urlStoryId) {
             select.value = urlStoryId;
             await loadStory(urlStoryId);
 
-            if (progressStr) {
+            if (urlChapterId && currentChapters[urlChapterId]) {
+                // Direct link to chapter
+                loadChapter(urlChapterId);
+                showToast(`Đang mở chương ${urlChapterId}`, "success");
+            } else if (progressStr) {
                 try {
                     let allProgress = JSON.parse(progressStr);
                     // Migration
@@ -216,10 +267,18 @@ async function init() {
                             }
                         }, 300);
                         showToast("Đã khôi phục tiến trình đọc!", "success");
+                    } else {
+                        // Fallback to chapter 1 if no progress and no specific chapter in URL
+                        const firstChap = Object.keys(currentChapters).map(Number).sort((a, b) => a - b)[0];
+                        if (firstChap) loadChapter(firstChap);
                     }
                 } catch (err) {
                     console.error("Error loading progress:", err);
                 }
+            } else {
+                // No progress, just load first chapter
+                const firstChap = Object.keys(currentChapters).map(Number).sort((a, b) => a - b)[0];
+                if (firstChap) loadChapter(firstChap);
             }
         } else {
             await loadProgress();
@@ -309,6 +368,7 @@ function renderChapterList() {
 
 function loadChapter(num, fromRestore = false) {
     currentChapterId = num;
+    updateURL(currentStoryId, num);
     // Smart cleanup: Keep current and next chapter, remove others
     if (window.preloadBuffer) {
         const nextId = getNextChapterId(num);

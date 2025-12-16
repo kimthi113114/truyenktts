@@ -70,6 +70,30 @@ document.addEventListener('DOMContentLoaded', () => {
     // ==========================================================
     // 3. HÀM INIT
     // ==========================================================
+    // ==========================================================
+    // 2.5. URL HANDLING
+    // ==========================================================
+    function getStoryIdFromURL() {
+        const path = window.location.pathname;
+        const match = path.match(/\/audio\/([^\/]+)/);
+        return match ? match[1] : null;
+    }
+
+    function getChapterIdFromURL() {
+        const path = window.location.pathname;
+        const match = path.match(/\/audio\/[^\/]+\/(\d+)/);
+        return match ? match[1] : null;
+    }
+
+    function updateURL(storyId, chapterId) {
+        if (!storyId) return;
+        const newPath = `/audio/${storyId}${chapterId ? '/' + chapterId : ''}`;
+        window.history.pushState({ storyId, chapterId }, '', newPath);
+    }
+
+    // ==========================================================
+    // 3. HÀM INIT
+    // ==========================================================
     async function init() {
         if (!els.playBtn || !els.storySelect) return;
 
@@ -86,7 +110,43 @@ document.addEventListener('DOMContentLoaded', () => {
                     els.storySelect.appendChild(option);
                 });
             }
-            await loadProgress();
+
+            const urlStoryId = getStoryIdFromURL();
+            const urlChapterId = getChapterIdFromURL();
+
+            if (urlStoryId) {
+                // If URL has story, load it
+                els.storySelect.value = urlStoryId;
+                // If value set successfully (story exists)
+                if (els.storySelect.value === urlStoryId) {
+                    await loadStory(urlStoryId);
+
+                    if (urlChapterId) {
+                        let startTime = 0;
+                        try {
+                            const saved = localStorage.getItem('audioPlayerProgress');
+                            if (saved) {
+                                const state = JSON.parse(saved);
+                                if (state.storyId === urlStoryId && state.chapterId === parseInt(urlChapterId)) {
+                                    startTime = state.currentTime || 0;
+                                    // Optional: Check if startTime is practically 0 or too short to matter? No, exact is fine.
+                                }
+                            }
+                        } catch (e) { console.error(e); }
+
+                        // Pass autoPlay = false for initial load, but use saved startTime
+                        await playChapter(parseInt(urlChapterId), startTime, null, false);
+                    } else {
+                        // Check if we have saved progress for this story to resume
+                        await loadProgressCheck(urlStoryId);
+                    }
+                } else {
+                    // Story not found in list, maybe fallback to normal loadProgress
+                    await loadProgress();
+                }
+            } else {
+                await loadProgress();
+            }
         } catch (err) {
             showToast('Lỗi kết nối server', 'error');
             console.error(err);
@@ -95,7 +155,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // --- GÁN SỰ KIỆN ---
-        els.storySelect.addEventListener('change', (e) => loadStory(e.target.value));
+        els.storySelect.addEventListener('change', (e) => {
+            const val = e.target.value;
+            updateURL(val, null); // Update URL when story changes manually
+            loadStory(val);
+        });
 
         els.chapterSelect.addEventListener('change', (e) => {
             if (e.target.value) {
@@ -103,29 +167,40 @@ document.addEventListener('DOMContentLoaded', () => {
                 playChapter(parseInt(e.target.value));
             }
         });
-
         els.playBtn.addEventListener('click', togglePlay);
         if (els.prevBtn) els.prevBtn.addEventListener('click', prevChapter);
         if (els.nextBtn) els.nextBtn.addEventListener('click', nextChapter);
 
         if (els.speedSelect) {
             els.speedSelect.addEventListener('change', () => {
+                saveSettings();
                 if (currentChapterId) {
                     let currentPercent = 0;
                     if (audioPlayer.duration > 0) {
                         currentPercent = audioPlayer.currentTime / audioPlayer.duration;
                     }
                     const wasPlaying = isPlaying;
-                    playChapter(currentChapterId, 0, currentPercent).then(() => {
-                        if (!wasPlaying) audioPlayer.pause();
-                    });
-                    saveSettings();
+                    playChapter(currentChapterId, 0, currentPercent);
+                    nextChapterData = null;
+                    nextChapterId = null;
                 }
             });
         }
 
         if (els.voiceSelect) {
-            els.voiceSelect.addEventListener('change', () => saveSettings());
+            els.voiceSelect.addEventListener('change', () => {
+                saveSettings();
+                if (currentChapterId) {
+                    let currentPercent = 0;
+                    if (audioPlayer.duration > 0) {
+                        currentPercent = audioPlayer.currentTime / audioPlayer.duration;
+                    }
+                    const wasPlaying = isPlaying;
+                    playChapter(currentChapterId, 0, currentPercent);
+                    nextChapterData = null;
+                    nextChapterId = null;
+                }
+            });
         }
 
         if (els.toggleLyricsBtn) els.toggleLyricsBtn.addEventListener('click', toggleLyricsView);
@@ -177,7 +252,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         setupTimerUI();
         saveInterval = setInterval(() => {
-            if (isPlaying) saveProgress();
+            if (isPlaying) saveProgress(false); // Only local save periodically
             checkSleepTimer();
         }, 1000);
 
@@ -189,7 +264,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 updatePlayButton();
             }
         });
-        window.addEventListener('beforeunload', () => saveProgress(true));
+        window.addEventListener('beforeunload', () => saveProgress(true)); // Global sync on exit? Maybe safe to do so.
     }
 
     // ==========================================================
@@ -274,7 +349,6 @@ document.addEventListener('DOMContentLoaded', () => {
             showLoading(false);
         }
     }
-
     function extractChapters(text) {
         const chapters = {};
         const standardizedText = '\n' + (text || '').trim() + '\n';
@@ -289,10 +363,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return chapters;
     }
 
-    async function playChapter(chapterId, startTime = 0, startPercent = null) {
+    async function playChapter(chapterId, startTime = 0, startPercent = null, autoPlay = true) {
         if (!currentChapters[chapterId]) return;
 
         currentChapterId = chapterId;
+        updateURL(currentStoryId, currentChapterId); // Update URL
+
         if (els.chapterSelect) els.chapterSelect.value = chapterId;
         if (els.trackTitle) els.trackTitle.textContent = `Chương ${chapterId}: ${currentChapters[chapterId].title}`;
 
@@ -300,7 +376,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // --- FIX IOS: Hack để giữ audio context ---
         // Load rỗng ngay lập tức khi user tương tác
-        if (!audioPlayer.src || audioPlayer.src === '') {
+        if (autoPlay && (!audioPlayer.src || audioPlayer.src === '')) {
             audioPlayer.load();
         }
 
@@ -334,13 +410,17 @@ document.addEventListener('DOMContentLoaded', () => {
         if (audioDataToPlay && audioDataToPlay.audioUrl) {
             currentSubtitles = audioDataToPlay.subtitles || [];
             renderSubtitles(currentSubtitles);
-            startPlayback(audioDataToPlay.audioUrl, startTime, startPercent);
+            startPlayback(audioDataToPlay.audioUrl, startTime, startPercent, autoPlay);
         }
+
+        // Global Sync on Chapter Start
+        saveProgress(true);
 
         preloadNextChapter(chapterId);
         setupMediaSession(chapterId);
     }
 
+    // --- FETCH API VÀ STREAMING ---
     // --- FETCH API VÀ STREAMING ---
     async function getAudioUrl(text, currentLoadingChapterId, isPreload = false) {
         // 1. Xác định controller cần abort
@@ -356,59 +436,83 @@ document.addEventListener('DOMContentLoaded', () => {
         const voice = els.voiceSelect ? els.voiceSelect.value : "vi-VN-NamMinhNeural";
         const speed = els.speedSelect ? parseFloat(els.speedSelect.value) : 1.0;
 
-        try {
-            const response = await fetch('/api/tts-live-stream', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: text, voice, speed }),
-                signal: signal
-            });
+        const maxRetries = 10;
+        let attempt = 0;
 
-            if (!response.ok) throw new Error('TTS API Error');
+        while (attempt < maxRetries) {
+            try {
+                const response = await fetch('/api/tts-live-stream', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ text: text, voice, speed }),
+                    signal: signal
+                });
 
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder();
-            let buffer = '';
-
-            while (true) {
-                const { done, value } = await reader.read();
-                if (done) break;
-                buffer += decoder.decode(value, { stream: true });
-                const lines = buffer.split('\n');
-                buffer = lines.pop();
-
-                for (const line of lines) {
-                    if (!line.trim()) continue;
-                    const data = JSON.parse(line);
-
-                    if (data.type === 'progress' && !isPreload) {
-                        if (els.loadingText) els.loadingText.textContent = `Đang tải: ${data.val}%`;
-                    }
-                    else if (data.type === 'done') {
-                        const blob = base64ToBlob(data.audio, data.mimeType);
-                        return {
-                            audioUrl: URL.createObjectURL(blob),
-                            subtitles: data.subtitles || []
-                        };
-                    }
-                    else if (data.type === 'error') throw new Error(data.msg);
+                if (!response.ok) {
+                    // Nếu lỗi 5xx hoặc connection reset thì throw để retry
+                    if (response.status >= 500) throw new Error(`Server Error: ${response.status}`);
+                    throw new Error('TTS API Error');
                 }
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+                    buffer += decoder.decode(value, { stream: true });
+                    const lines = buffer.split('\n');
+                    buffer = lines.pop();
+
+                    for (const line of lines) {
+                        if (!line.trim()) continue;
+                        const data = JSON.parse(line);
+
+                        if (data.type === 'progress' && !isPreload) {
+                            if (els.loadingText) els.loadingText.textContent = `Đang tải: ${data.val}%`;
+                        }
+                        else if (data.type === 'done') {
+                            const blob = base64ToBlob(data.audio, data.mimeType);
+                            return {
+                                audioUrl: URL.createObjectURL(blob),
+                                subtitles: data.subtitles || []
+                            };
+                        }
+                        else if (data.type === 'error') throw new Error(data.msg);
+                    }
+                }
+                // Break loop if successful (though we return above)
+                break;
+            } catch (e) {
+                if (e.name === 'AbortError') {
+                    console.log(isPreload ? 'Hủy preload cũ...' : 'Hủy play cũ...');
+                    throw e; // Không retry nếu user abort
+                }
+
+                attempt++;
+                console.warn(`TTS Fetch attempt ${attempt} failed:`, e);
+
+                if (attempt >= maxRetries) {
+                    throw e;
+                }
+
+                // Wait before retry (1s, 2s, 3s...)
+                await new Promise(r => setTimeout(r, attempt * 1000));
+            } finally {
+                // Clear controller logic handled outside loop or after success/fail
             }
-        } catch (e) {
-            if (e.name === 'AbortError') {
-                console.log(isPreload ? 'Hủy preload cũ...' : 'Hủy play cũ...');
-            }
-            throw e;
-        } finally {
-            if (isPreload && preloadFetchController && preloadFetchController.signal === signal) {
-                preloadFetchController = null;
-            } else if (!isPreload && playFetchController && playFetchController.signal === signal) {
-                playFetchController = null;
-            }
+        }
+
+        // Cleanup logic moved here to ensure it runs after retries are done
+        if (isPreload && preloadFetchController && preloadFetchController.signal === signal) {
+            preloadFetchController = null;
+        } else if (!isPreload && playFetchController && playFetchController.signal === signal) {
+            playFetchController = null;
         }
     }
 
-    function startPlayback(url, startTime = 0, startPercent = null) {
+    function startPlayback(url, startTime = 0, startPercent = null, autoPlay = true) {
         // Fix Memory Leak: Revoke blob cũ
         if (audioPlayer.src && audioPlayer.src.startsWith('blob:') && audioPlayer.src !== url) {
             URL.revokeObjectURL(audioPlayer.src);
@@ -425,18 +529,26 @@ document.addEventListener('DOMContentLoaded', () => {
                 audioPlayer.currentTime = startTime;
             }
 
-            audioPlayer.play().then(() => {
-                isPlaying = true;
-                updatePlayButton();
-                updateProgress();
-            }).catch(e => {
-                if (e.name !== 'AbortError') {
-                    console.error("Autoplay prevented:", e);
-                    // Có thể do iOS chặn -> Thử recover hoặc nhắc user
-                }
+            if (autoPlay) {
+                audioPlayer.play().then(() => {
+                    isPlaying = true;
+                    updatePlayButton();
+                    updateProgress();
+                }).catch(e => {
+                    if (e.name !== 'AbortError') {
+                        console.error("Autoplay prevented:", e);
+                        // Có thể do iOS chặn -> Thử recover hoặc nhắc user
+                    }
+                    isPlaying = false;
+                    updatePlayButton();
+                });
+            } else {
+                // AutoPlay = false, just update UI
                 isPlaying = false;
                 updatePlayButton();
-            });
+                updateProgress();
+                showToast("Sẵn sàng phát (Bấm Play)", "info");
+            }
         };
         audioPlayer.addEventListener('loadedmetadata', currentMetadataHandler, { once: true });
     }
@@ -592,10 +704,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- SETTINGS & STORAGE ---
-    function saveProgress(force = false) {
+    function saveProgress(isGlobalSync = false) {
         if (!currentStoryId || !currentChapterId) return;
         const timeToSave = (audioPlayer.duration && audioPlayer.currentTime > 0)
             ? audioPlayer.currentTime : savedStartTime;
+
+        // 1. Save Local State (Player specific) - Always save locally for resume
         const state = {
             storyId: currentStoryId,
             chapterId: currentChapterId,
@@ -603,6 +717,41 @@ document.addEventListener('DOMContentLoaded', () => {
             timestamp: Date.now()
         };
         try { localStorage.setItem('audioPlayerProgress', JSON.stringify(state)); } catch (e) { }
+
+        // 2. Sync Global Reading Progress (only if requested, e.g. on chapter change)
+        if (isGlobalSync) {
+            try {
+                let allProgress = {};
+                const stored = localStorage.getItem('readingProgress');
+                if (stored) {
+                    allProgress = JSON.parse(stored);
+                    if (allProgress.storyId) {
+                        const old = allProgress;
+                        allProgress = {};
+                        if (old.storyId) allProgress[old.storyId] = old;
+                    }
+                }
+
+                allProgress[currentStoryId] = {
+                    chapterId: currentChapterId,
+                    sentenceIndex: 0,
+                    audio: true,
+                    timestamp: Date.now()
+                };
+
+                localStorage.setItem('readingProgress', JSON.stringify(allProgress));
+
+                const userStr = localStorage.getItem('user');
+                if (userStr) {
+                    const user = JSON.parse(userStr);
+                    fetch('/api/sync/save', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ key: user.username, data: allProgress })
+                    }).catch(e => console.warn("Sync failed", e));
+                }
+            } catch (e) { console.warn("Error syncing progress", e); }
+        }
     }
     function saveSettings() {
         const settings = {
@@ -638,22 +787,55 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!saved) return;
             const state = JSON.parse(saved);
             if (!state.storyId || !state.chapterId) return;
-            els.storySelect.value = state.storyId;
-            if (els.storySelect.value !== state.storyId) return;
-            await loadStory(state.storyId);
-            els.chapterSelect.value = state.chapterId;
-            if (parseInt(els.chapterSelect.value) !== state.chapterId) return;
-            currentChapterId = state.chapterId;
-            if (currentChapters[currentChapterId]) {
-                if (els.trackTitle) els.trackTitle.textContent = `Chương ${currentChapterId}: ${currentChapters[currentChapterId].title}`;
-            }
-            if (els.currentTime) els.currentTime.textContent = formatTime(state.currentTime);
-            savedStartTime = state.currentTime;
-            if (els.playBtn) els.playBtn.disabled = false;
-            if (els.prevBtn) els.prevBtn.disabled = false;
-            if (els.nextBtn) els.nextBtn.disabled = false;
-            showToast('Khôi phục phiên nghe cũ (Bấm Play để nghe)', 'info');
+
+            // Assuming this is used on initial load without URL params
+            loadProgressCheck(state.storyId, state);
         } catch (e) { console.error(e); }
+    }
+
+    async function loadProgressCheck(storyId, stateObj = null) {
+        try {
+            if (!stateObj) {
+                const saved = localStorage.getItem('audioPlayerProgress');
+                if (saved) stateObj = JSON.parse(saved);
+            }
+
+            if (stateObj && stateObj.storyId === storyId) {
+                els.storySelect.value = storyId;
+                if (els.storySelect.value !== storyId) return; // Story not in list?
+
+                // Note: loadStory might have already been called if we came from URL handling logic
+                // But if calling from generic loadProgress, we need to call it.
+                // However, logic in init handles the loadStory call before calling this if params exist.
+                // If init calls this, loadStory is ALREADY done. 
+                // We just need to check if we should set chapter.
+
+                // Determine if we need to set chapter from saved state
+                if (stateObj.chapterId) {
+                    els.chapterSelect.value = stateObj.chapterId;
+                    if (parseInt(els.chapterSelect.value) === stateObj.chapterId) {
+                        currentChapterId = stateObj.chapterId;
+                        if (currentChapters[currentChapterId]) {
+                            if (els.trackTitle) els.trackTitle.textContent = `Chương ${currentChapterId}: ${currentChapters[currentChapterId].title}`;
+                        }
+                        if (els.currentTime) els.currentTime.textContent = formatTime(stateObj.currentTime);
+                        savedStartTime = stateObj.currentTime;
+
+                        // Update URL to match restored state if not already set
+                        updateURL(storyId, currentChapterId);
+
+                        if (els.playBtn) els.playBtn.disabled = false;
+                        if (els.prevBtn) els.prevBtn.disabled = false;
+                        if (els.nextBtn) els.nextBtn.disabled = false;
+                        showToast('Khôi phục phiên nghe cũ (Bấm Play để nghe)', 'info');
+                    }
+                }
+            } else {
+                // If specific storyId was requested but saved state is different, maybe just load chapter 1?
+                // Or if just checking progress for a specific story but no saved progress for THAT story... 
+                // Just do nothing, let user select chapter.
+            }
+        } catch (e) { console.error("loadProgressCheck error", e); }
     }
 
     // --- UI PHỤ (LYRICS, TIMER, WAVEFORM) ---
@@ -716,7 +898,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 title: `Chương ${chapterId}: ${currentChapters[chapterId].title}`,
                 artist: els.storySelect.options[els.storySelect.selectedIndex].text,
                 album: 'Truyện TTS',
-                artwork: [{ src: 'icon/favico.png', sizes: '512x512', type: 'image/png' }]
+                artwork: [{ src: '../../icon/favico.png', sizes: '512x512', type: 'image/png' }]
             });
             navigator.mediaSession.setActionHandler('play', togglePlay);
             navigator.mediaSession.setActionHandler('pause', togglePlay);

@@ -8,16 +8,21 @@
     <link
         href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Poppins:wght@600;700;800&display=swap"
         rel="stylesheet">
-    <link rel="stylesheet" href="css/listen.css">
-    <link rel="icon" href="icon/favico.ico" type="image/x-icon">
+    <link rel="stylesheet" href="/css/listen.css">
+    <link rel="icon" href="../../icon/favico.ico" type="image/x-icon">
 
-    <link rel="manifest" href="manifest.json">
+    <link rel="manifest" href="/manifest.json">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Truyện K-TTS">
 </head>
 
 <body>
+    <script>
+        if (!localStorage.getItem('user')) {
+            window.location.href = '/login';
+        }
+    </script>
     <!-- Library Modal -->
     <div class="modal-overlay" id="libraryModal">
         <div class="modal">
@@ -39,26 +44,41 @@
                 </div>
             </div>
             <div id="info" class="info">
-                <img src="icon/favico.png" alt="" style="width:50px;height:50px">
+                <img src="/icon/favico.png" alt="" style="width:50px;height:50px">
                 <span style="display:block;font-weight:600">Truyện K-TTS</span>
-                <i style="font-size:0.8rem">version 1.1.9</i>
+                <i style="font-size:0.8rem">version 1.0.10</i>
             </div>
         </div>
     </div>
 
     <div class="main-content">
         <div class="top-bar">
-            <button class="toggle-sidebar" onclick="openLibraryModal()">📚</button>
-            <h6 id="currentChapterTitle" style="font-weight:600;color:var(--text-dark)">Chưa chọn chương</h6>
-            <div style="display:flex;gap:10px">
-                <a href="audio" class="nav-btn" title="Trình phát"
-                    style="text-decoration:none;display:flex;align-items:center;justify-content:center">🎧</a>
-                <button class="nav-btn" onclick="openSettingsModal()" title="Cài đặt">⚙️</button>
+            <div class="header-left">
+                <a href="/" class="home-btn" title="Trang chủ">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                        <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                    </svg>
+                    <span class="home-text">Trang Chủ</span>
+                </a>
+                <button class="toggle-sidebar" onclick="openLibraryModal()" title="Danh sách chương">
+                    📚 <span class="mobile-hidden">Danh sách</span>
+                </button>
+            </div>
+
+            <div class="header-center">
+                <h6 id="currentChapterTitle">Chưa chọn chương</h6>
+            </div>
+
+            <div class="header-right">
+                <a href="/audio" class="nav-btn icon-only" title="Trình phát">🎧</a>
+                <button class="nav-btn icon-only" onclick="openSettingsModal()" title="Cài đặt">⚙️</button>
             </div>
         </div>
         <div class="reading-area" id="readingArea" onclick="toggleTTSControls()">
             <div style="text-align:center;margin-top:100px;color:#9ca3af">
-                <p style="font-size:4rem;margin-bottom:20px"><img src="icon/favico.png" alt=""
+                <p style="font-size:4rem;margin-bottom:20px"><img src="/icon/favico.png" alt=""
                         style="width:50px;height:50px"></p>
                 <p>Chọn truyện và chương để bắt đầu đọc</p>
             </div>
@@ -243,7 +263,7 @@
         </div>
     </div>
 
-    <script src="js/listen.js"></script>
+    <script src="/js/listen.js"></script>
 </body>
 
 </html>

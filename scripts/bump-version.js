@@ -5,44 +5,71 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const filePath = path.join(__dirname, '../public/listen.html');
+const rootDir = path.join(__dirname, '..');
+const packageJsonPath = path.join(rootDir, 'package.json');
+const indexHtmlPath = path.join(rootDir, 'public/index.html');
+const listenHtmlPath = path.join(rootDir, 'public/listen.html');
 
-try {
-    let content = fs.readFileSync(filePath, 'utf8');
+// Helper to read JSON
+function readPackageJson() {
+    return JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+}
 
-    // Regex to find version X.Y.Z
-    const versionRegex = /version (\d+)\.(\d+)\.(\d+)/;
-    const match = content.match(versionRegex);
+// Helper to Bump Version
+function bumpVersion(currentVersion, type = 'patch') {
+    let [major, minor, patch] = currentVersion.split('.').map(Number);
 
-    if (match) {
-        let major = parseInt(match[1]);
-        let minor = parseInt(match[2]);
-        let patch = parseInt(match[3]);
-
-        console.log(`Current version: ${major}.${minor}.${patch}`);
-
-        // Increment logic
-        patch++;
-        if (patch > 9) {
-            patch = 0;
-            minor++;
-            if (minor > 9) {
-                minor = 0;
-                major++;
-            }
-        }
-
-        const newVersion = `${major}.${minor}.${patch}`;
-        console.log(`New version: ${newVersion}`);
-
-        const newContent = content.replace(versionRegex, `version ${newVersion}`);
-        fs.writeFileSync(filePath, newContent, 'utf8');
-        console.log('Version updated successfully.');
+    if (type === 'major') {
+        major++;
+        minor = 0;
+        patch = 0;
+    } else if (type === 'minor') {
+        minor++;
+        patch = 0;
     } else {
-        console.error('Version string not found in listen.html');
-        process.exit(1);
+        patch++;
     }
+
+    return `${major}.${minor}.${patch}`;
+}
+
+// Update File Content Helper
+function updateFile(filePath, regex, replacement) {
+    if (!fs.existsSync(filePath)) {
+        console.warn(`⚠️ File not found: ${filePath}`);
+        return;
+    }
+    const content = fs.readFileSync(filePath, 'utf8');
+    if (!regex.test(content)) {
+        console.warn(`⚠️ Version pattern not found in: ${filePath}`);
+        return;
+    }
+    const newContent = content.replace(regex, replacement);
+    fs.writeFileSync(filePath, newContent, 'utf8');
+    console.log(`✅ Updated: ${filePath}`);
+}
+
+// Main
+try {
+    const pkg = readPackageJson();
+    const oldVersion = pkg.version;
+    const type = process.argv[2] || 'patch'; // 'patch', 'minor', 'major'
+
+    const newVersion = bumpVersion(oldVersion, type);
+    console.log(`🚀 Bumping version: ${oldVersion} -> ${newVersion} (${type})`);
+
+    // 1. Update package.json
+    pkg.version = newVersion;
+    fs.writeFileSync(packageJsonPath, JSON.stringify(pkg, null, 2) + '\n');
+    console.log(`✅ Updated: package.json`);
+
+    // 2. Update public/index.html (Matches "vX.Y.Z")
+    updateFile(indexHtmlPath, /v\d+\.\d+\.\d+/g, `v${newVersion}`);
+
+    // 3. Update public/listen.html (Matches "version X.Y.Z")
+    updateFile(listenHtmlPath, /version \d+\.\d+\.\d+/g, `version ${newVersion}`);
+
 } catch (err) {
-    console.error('Error updating version:', err);
+    console.error('❌ Error bumping version:', err);
     process.exit(1);
 }

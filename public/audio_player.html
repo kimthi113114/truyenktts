@@ -5,7 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Audio Player - Truyện KTTS</title>
-    <link rel="icon" href="icon/favico.ico" type="image/x-icon">
+    <link rel="icon" href="../../icon/favico.ico" type="image/x-icon">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -155,6 +155,7 @@
             text-overflow: ellipsis;
             background: linear-gradient(to right, #fff, #cbd5e1);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
@@ -559,6 +560,11 @@
 </head>
 
 <body>
+    <script>
+        if (!localStorage.getItem('user')) {
+            window.location.href = '/login';
+        }
+    </script>
     <!-- Background Effects -->
     <div class="bg-mesh"></div>
     <div class="bg-orb"></div>
@@ -580,9 +586,10 @@
         </div>
 
         <!-- Middle Section: Visuals -->
+        <link rel="icon" href="/icon/favico.ico" type="image/x-icon">
         <div class="visual-area">
             <div class="album-art" id="albumArt">
-                <span><img src="icon/favico.png" alt="" style="width:120px;height:120px;margin-top:20px"></span>
+                <span><img src="/icon/favico.png" alt="" style="width:120px;height:120px;margin-top:20px"></span>
             </div>
 
             <div class="subtitle-container" id="subtitleContainer">
@@ -672,6 +679,14 @@
                     <select id="voiceSelect" style="border:none; text-align: right; width: auto;">
                         <option value="vi-VN-NamMinhNeural">Nam Minh (Nam)</option>
                         <option value="vi-VN-HoaiMyNeural">Hoài My (Nữ)</option>
+                        <option value="de-DE-SeraphinaMultilingualNeural">Seraphina (Nữ)</option>
+                        <option value="fr-FR-VivienneMultilingualNeural">Vivienne (Nữ)</option>
+                        <option value="en-US-EmmaMultilingualNeural">Emma (Nữ)</option>
+                        <option value="en-US-BrianMultilingualNeural">Brian (Nam)</option>
+                        <option value="fr-FR-RemyMultilingualNeural">Remy (Nam)</option>
+                        <option value="it-IT-GiuseppeMultilingualNeural">Giuseppe (Nam)</option>
+                        <option value="ko-KR-HyunsuMultilingualNeural">Hyunsu (Nam)</option>
+                        <option value="pt-BR-ThalitaMultilingualNeural">Thalita (Nữ)</option>
                     </select>
                 </div>
             </div>

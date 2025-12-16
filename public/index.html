@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="vi">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Truyện K-TTS</title>
+    <meta name="apple-mobile-web-app-title" content="Truyện K-TTS">
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/icon/favico.ico" type="image/x-icon">
+</head>
+
+<body>
+    <div class="header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+            <img src="/icon/favico.png" alt="Logo" style="height: 40px; width: auto;">
+            <h2 style="margin: 0;">Truyện K-TTS <span
+                    style="font-size: 0.8rem; color: #888; font-weight: normal;">v1.0.10</span></h2>
+        </div>
+        <div style="display: flex; align-items: center; gap: 1rem;">
+            <span id="welcome-msg" style="font-size: 0.9rem; color: #666;"></span>
+            <button class="logout-btn" onclick="logout()">Đăng xuất</button>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <div class="controls-toolbar"
+            style="margin-bottom: 2rem; display: flex; justify-content: flex-end; align-items: center;">
+            <button id="viewToggleBtn" style="
+                background-color: var(--card-bg); 
+                border: 1px solid #ddd; 
+                padding: 0.6rem 1.2rem; 
+                border-radius: 20px; 
+                display: flex; 
+                align-items: center; 
+                gap: 8px; 
+                cursor: pointer; 
+                font-weight: 500; 
+                color: var(--text-color);
+                box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                transition: all 0.2s ease;">
+                <span id="viewIcon" style="font-size: 1.1rem;">☰</span>
+                <span id="viewText">Danh sách</span>
+            </button>
+        </div>
+        <div class="story-grid" id="storyGrid">
+            <!-- Story cards will be injected here -->
+        </div>
+    </div>
+
+    <!-- Story Detail Modal -->
+    <div class="modal-overlay" id="detailModal">
+        <div class="modal">
+            <button class="close-modal" onclick="closeModal()">×</button>
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script>
+        // Auth Check
+        const user = localStorage.getItem('user');
+        if (!user) {
+            window.location.href = '/login';
+        } else {
+            try {
+                const u = JSON.parse(user);
+                document.getElementById('welcome-msg').innerText = `Xin chào, ${u.username}`;
+            } catch (e) {
+                localStorage.removeItem('user');
+                window.location.href = '/login';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('user');
+            window.location.href = '/login';
+        }
+
+        // Fetch Stories
+        async function loadStories() {
+            try {
+                const response = await fetch('/api/stories-listen');
+                const stories = await response.json();
+
+                const grid = document.getElementById('storyGrid');
+                grid.innerHTML = '';
+
+                // 1. Fetch History ONCE
+                let allProgress = {};
+                try {
+                    // Get Local
+                    const localProgressStr = localStorage.getItem('readingProgress');
+                    if (localProgressStr) {
+                        const parsed = JSON.parse(localProgressStr);
+                        if (parsed.storyId) {
+                            allProgress[parsed.storyId] = parsed; // Legacy
+                        } else {
+                            allProgress = parsed;
+                        }
+                    }
+
+                    // Get Remote
+                    const userStr = localStorage.getItem('user');
+                    if (userStr) {
+                        const user = JSON.parse(userStr);
+                        const historyResp = await fetch(`/api/sync/load/${user.username}`);
+                        if (historyResp.ok) {
+                            const historyData = await historyResp.json();
+                            if (historyData.success && historyData.data) {
+                                const remoteMap = typeof historyData.data === 'string' ? JSON.parse(historyData.data) : historyData.data;
+                                // Merge remote
+                                Object.keys(remoteMap).forEach(k => {
+                                    if (!allProgress[k] || (remoteMap[k].timestamp > allProgress[k].timestamp)) {
+                                        allProgress[k] = remoteMap[k];
+                                    }
+                                });
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Error loading history:', e);
+                }
+
+                // 2. Sort Stories
+                stories.sort((a, b) => {
+                    const progA = allProgress[a.id];
+                    const progB = allProgress[b.id];
+
+                    if (progA && progB) return (progB.timestamp || 0) - (progA.timestamp || 0);
+                    if (progA) return -1;
+                    if (progB) return 1;
+                    return 0;
+                });
+
+                // 3. Render
+                for (const story of stories) {
+                    const card = document.createElement('div');
+                    card.className = 'story-card';
+
+                    let historyText = '';
+                    const p = allProgress[story.id];
+                    if (p) {
+                        const date = new Date(p.timestamp || Date.now()).toLocaleDateString('vi-VN');
+                        historyText = `<div class="story-history">📍 Đọc tới chương ${p.chapterId} (${date})</div>`;
+                    }
+
+                    card.onclick = () => showDetail(story, historyText, p);
+
+                    card.innerHTML = `
+                         <img src="/covers/${story.cover}" alt="${story.title}" class="story-cover" onerror="this.src='https://via.placeholder.com/300x400?text=No+Cover'">
+                        <div class="story-info">
+                            <div class="story-title" title="${story.title}">${story.title}</div>
+                            <div class="story-author">Tác giả: ${story.author}</div>
+                            ${historyText}
+                        </div>
+                    `;
+                    grid.appendChild(card);
+                }
+            } catch (error) {
+                console.error('Error loading stories:', error);
+                document.getElementById('storyGrid').innerHTML = '<p style="text-align:center;width:100%">Lỗi tải danh sách truyện</p>';
+            }
+        }
+
+        function showDetail(story, historyText, progress) {
+            const modal = document.getElementById('detailModal');
+            const content = document.getElementById('modalContent');
+
+            content.innerHTML = `
+                <div style="display:flex; gap: 2rem; flex-wrap: wrap;">
+                    <img src="/covers/${story.cover}" style="width: 150px; height: 200px; object-fit: cover; border-radius: 4px;" onerror="this.src='https://via.placeholder.com/150x200'">
+                    <div style="flex:1; min-width: 200px;">
+                        <h2 style="margin-top:0; color: var(--primary-color);">${story.title}</h2>
+                        <p><strong>Tác giả:</strong> ${story.author}</p>
+                        <p><strong>ID:</strong> ${story.id}</p>
+                        ${historyText ? `<div style="margin: 1rem 0; padding: 0.5rem; background: #f3f4f6; border-radius: 4px;">${historyText}</div>` : ''}
+                        <div style="margin-top: 2rem;">
+                            <a href="/audio/${story.id}/${progress?.chapterId}" class="button" style="text-decoration: none; background: var(--primary-color); color: white; padding: 0.8rem 1.5rem; border-radius: 4px; display:inline-block;">🎧 Nghe Truyện</a>
+                            <a href="/listen/${story.id}/${progress?.chapterId}" class="button" style="text-decoration: none; background: var(--primary-color); color: white; padding: 0.8rem 1.5rem; border-radius: 4px; display:inline-block;">📖 Đọc Truyện</a>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            modal.classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('detailModal').classList.remove('active');
+        }
+
+        document.getElementById('detailModal').addEventListener('click', (e) => {
+            if (e.target === document.getElementById('detailModal')) {
+                closeModal();
+            }
+        });
+
+        // View Mode Logic
+        const viewToggleBtn = document.getElementById('viewToggleBtn');
+        const viewIcon = document.getElementById('viewIcon');
+        const viewText = document.getElementById('viewText');
+        const storyGrid = document.getElementById('storyGrid');
+        let isListView = localStorage.getItem('viewMode') === 'list';
+
+        function updateViewMode() {
+            if (isListView) {
+                storyGrid.classList.add('story-list');
+                if (viewIcon) viewIcon.textContent = '▦';
+                if (viewText) viewText.textContent = 'Dạng Lưới';
+                viewToggleBtn.title = "Chuyển sang dạng lưới";
+            } else {
+                storyGrid.classList.remove('story-list');
+                if (viewIcon) viewIcon.textContent = '☰';
+                if (viewText) viewText.textContent = 'Danh sách';
+                viewToggleBtn.title = "Chuyển sang dạng danh sách";
+            }
+            localStorage.setItem('viewMode', isListView ? 'list' : 'grid');
+        }
+
+        viewToggleBtn.addEventListener('click', () => {
+            isListView = !isListView;
+            updateViewMode();
+        });
+
+        // Init View
+        updateViewMode();
+
+        // Initialize
+        loadStories();
+    </script>
+</body>
+
+</html>

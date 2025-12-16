@@ -18,6 +18,7 @@ yarn.lock
 .env.test.local
 .env.production.local
 .eslintcache
+.env
 
 /.idea
 /.vscode

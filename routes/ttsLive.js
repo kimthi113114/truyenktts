@@ -142,7 +142,7 @@ router.post("/tts-live-stream", async (req, res) => {
             const tempFileName = `tts_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}.mp3`;
             const tempFile = path.join(os.tmpdir(), tempFileName);
 
-            let retries = 3; // Thử lại tối đa 3 lần nếu lỗi mạng
+            let retries = 5; // Thử lại tối đa 3 lần nếu lỗi mạng
             let lastError;
 
             while (retries > 0) {

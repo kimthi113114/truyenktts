@@ -1,14 +1,17 @@
 {
   "name": "content-chapter-scraper",
-  "version": "1.0.0",
+  "version": "1.0.10",
   "type": "module",
   "scripts": {
     "start": "nodemon server.js"
   },
   "dependencies": {
+    "@microsoft/microsoft-graph-client": "^3.0.7",
     "dotenv": "^17.2.3",
     "express": "^4.19.2",
     "get-mp3-duration": "^1.0.0",
+    "input": "^1.0.1",
+    "isomorphic-fetch": "^3.0.0",
     "node-edge-tts": "^1.2.8",
     "pg": "^8.16.3",
     "uuid": "^13.0.0",
