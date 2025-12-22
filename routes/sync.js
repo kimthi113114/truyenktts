@@ -25,12 +25,50 @@ router.post('/sync/save', async (req, res) => {
     }
 
     try {
+        let existingData = { data: {} };
+
+        // 1. Try to load existing file first
+        if (global.folderId && global.driveId) {
+            try {
+                console.log(`📥 Reading existing ${filename} for merge...`);
+                const existingFile = await onedrive.getFileByName(filename, global.folderId, global.driveId);
+                if (existingFile && existingFile.url) {
+                    const resp = await fetch(existingFile.url);
+                    if (resp.ok) {
+                        const json = await resp.json();
+                        if (json && json.data) {
+                            existingData = json;
+                            console.log(`✅ Loaded existing data with ${Object.keys(existingData.data).length} stories.`);
+                        }
+                    }
+                } else {
+                    console.log(`ℹ️ File ${filename} does not exist yet. Creating new.`);
+                }
+            } catch (readErr) {
+                console.warn("⚠️ Failed to read existing file (ignoring):", readErr.message);
+            }
+        }
+
+        // 2. MERGE DATA (Partial Update)
+        // data from client is expected to be { "storyId": { ... } }
+        console.log("🔄 Merging new data:", Object.keys(data));
+
+        // Use deep merge or spread at story level
+        // existingData.data = { ...existingData.data, ...data }; 
+        // Iterate keys to ensure we don't wipe other props if any (?) 
+        // Actually, client sends { "storyId": { ... } } so simple spread is fine for story-level keys.
+        // But if we want to support deep merge within a story (unlikely needed for this simple case), we'd need lodash.merge.
+        // For now, story-level replacement is desired behavior (update whole story progress).
+
+        Object.assign(existingData.data, data);
+
         const content = JSON.stringify({
-            data: data,
+            data: existingData.data,
             last_updated: new Date().toISOString()
         }, null, 2);
 
-        // Save to Root of Shared Folder (or a subfolder if we implemented that)
+        // 3. Save to Root of Shared Folder
+        console.log(`📤 Saving merged ${filename} to OneDrive...`);
         const result = await onedrive.saveFile(
             filename,
             content,
@@ -39,9 +77,9 @@ router.post('/sync/save', async (req, res) => {
         );
 
         if (result.success) {
+            console.log("✅ Save successful!");
             res.json({ success: true, message: "Saved to OneDrive successfully" });
         } else {
-            // Fallback? Or just error. User demanded Cloud interaction.
             throw new Error(result.error || "Unknown OneDrive error");
         }
     } catch (err) {
@@ -62,12 +100,21 @@ router.get('/sync/load/:key', async (req, res) => {
     const filename = `${safeKey}.json`;
 
     try {
-        if (!global.folderId || !global.driveId) {
-            console.warn("⚠️ OneDrive not ready for load.");
-            return res.status(503).json({ error: "Cloud storage not ready" });
-        }
+        // Check if OneDrive is ready
+        // if (!global.folderId || !global.driveId) {
+        //     console.warn("⚠️ Using Root Drive for load (Shared folder not ready).");
+        // }
 
-        const file = await onedrive.getFileByName(filename, global.folderId, global.driveId);
+        const folderId = global.folderId; // Undefined is fine (handled as root in helper?)
+        const driveId = global.driveId;
+
+        // Note: We need to ensure getFileByName handles missing IDs by checking root
+        // OneDriveStorage.getFileByName implementation:
+        // if (!this.client) return null;
+        // listChildren(parentId, driveId) -> if !driveId, defaults to /me/drive/root/children
+        // So it SHOULD work!
+
+        const file = await onedrive.getFileByName(filename, folderId, driveId);
 
         if (file && file.url) {
             const response = await fetch(file.url);

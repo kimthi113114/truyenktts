@@ -27,6 +27,51 @@ function splitText(text, maxLength = 2000) {
     return chunks;
 }
 
+// function splitText(text, maxLength = 2000, minLineLength = 10) {
+//     // 1. split theo \n
+//     let lines = text
+//         .split('\n')
+//         .map(line => line.trim())
+//         .filter(Boolean);
+
+//     // 2. thêm dấu . nếu thiếu
+//     lines = lines.map(line =>
+//         /[.?!:]$/.test(line) ? line : line + "."
+//     );
+
+//     // 3. merge dòng ngắn
+//     const merged = [];
+//     for (let i = 0; i < lines.length; i++) {
+//         const line = lines[i];
+
+//         if (line.length <= minLineLength && i + 1 < lines.length) {
+//             // gộp với dòng tiếp theo
+//             lines[i + 1] = line + " " + lines[i + 1];
+//         } else {
+//             merged.push(line);
+//         }
+//     }
+
+//     // 4. chia theo maxLength
+//     const chunks = [];
+//     let current = "";
+
+//     for (const line of merged) {
+//         const piece = line + "\n";
+//         if ((current + piece).length > maxLength) {
+//             chunks.push(current.trimEnd());
+//             current = piece;
+//         } else {
+//             current += piece;
+//         }
+//     }
+
+//     if (current) chunks.push(current.trimEnd());
+
+//     return chunks;
+// }
+
+
 /**
  * POST /api/tts-live
  * Generate TTS audio without saving to disk (concatenates chunks for long text)
@@ -121,7 +166,6 @@ router.post("/tts-live-stream", async (req, res) => {
 
         // 1. Xử lý input
         const sanitizedText = text
-            .replace(/["'`«»""'']/g, '') // Bỏ ngoặc đặc biệt
             .replace(/\s+/g, ' ')         // Xóa khoảng trắng thừa
             .trim();
 
@@ -130,7 +174,7 @@ router.post("/tts-live-stream", async (req, res) => {
         const rateStr = speedPercent >= 0 ? `+${speedPercent}%` : `${speedPercent}%`;
 
         // 2. Chia nhỏ text (Sử dụng hàm thông minh ở trên)
-        const chunks = splitText(sanitizedText, 150); // 150 ký tự là đẹp cho 1 dòng sub
+        const chunks = splitText(sanitizedText, 100);
         const totalChunks = chunks.length;
         let completedChunks = 0;
 
@@ -146,10 +190,22 @@ router.post("/tts-live-stream", async (req, res) => {
             let lastError;
 
             while (retries > 0) {
+                let lastdata = chunk
+                    .replaceAll('【', '.')
+                    .replaceAll('】', '.')
+                    .replaceAll('[', '.')
+                    .replaceAll(']', '.')
+                    .replaceAll('(', '.')
+                    .replaceAll(')', '.')
+                    .replaceAll('”', '.')
+                    .replaceAll('“', '.')
+                    .replaceAll('"', '.')
+                    .replaceAll('"', '.')
+                    .replaceAll("+", " cộng ")
+                    .replaceAll("-", " trừ ").trim();
                 try {
-                    // --- GỌI TTS ---
                     const tts = new EdgeTTS({ voice, rate: rateStr, volume: "+0%" });
-                    await tts.ttsPromise(chunk, tempFile);
+                    await tts.ttsPromise(lastdata, tempFile);
 
                     // Đợi một chút để file chắc chắn được ghi xong (an toàn cho hệ điều hành)
                     await new Promise(r => setTimeout(r, 50));
@@ -168,9 +224,13 @@ router.post("/tts-live-stream", async (req, res) => {
 
                     return buffer;
                 } catch (err) {
+
+                    console.group(`Error processing chunk ${index}:`, err);
+                    console.error(`chunk: ${lastdata}`);
+                    console.groupEnd();
                     lastError = err;
                     retries--;
-                    if (retries > 0) await new Promise(r => setTimeout(r, 1000));
+                    if (retries > 0) await new Promise(r => setTimeout(r, 500));
                 }
             }
 

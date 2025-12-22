@@ -109,8 +109,8 @@
             align-items: center;
             justify-content: center;
             flex-direction: column;
-            gap: 20px;
-            padding: 20px 0;
+            gap: 10px;
+            padding: 10px 0;
         }
 
         .album-art {
@@ -147,9 +147,9 @@
         }
 
         .track-title {
-            font-size: 1.5rem;
+            font-size: 1.2rem;
             font-weight: 700;
-            margin-bottom: 8px;
+            margin-bottom: 4px;
             /* white-space: nowrap; */
             overflow: hidden;
             text-overflow: ellipsis;
@@ -163,7 +163,7 @@
             color: var(--text-sub);
             text-overflow: ellipsis;
             overflow: hidden;
-            font-size: 1rem;
+            font-size: 0.9rem;
             white-space: nowrap;
             font-weight: 400;
         }
@@ -431,6 +431,28 @@
             color: var(--text-main);
         }
 
+        /* Listen Button (Top Right) */
+        .btn-listen {
+            position: absolute;
+            top: 20px;
+            right: 24px;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-sub);
+            border-radius: 50%;
+            transition: all 0.2s;
+            z-index: 10;
+            text-decoration: none;
+        }
+
+        .btn-listen:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-main);
+        }
+
         /* Keyframes */
         @keyframes spin {
             to {
@@ -579,6 +601,15 @@
             </svg>
         </a>
 
+        <!-- Listen Button -->
+        <a href="/listen" class="btn-listen" aria-label="Chuyển sang chế độ đọc">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"></path>
+                <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"></path>
+            </svg>
+        </a>
+
         <!-- Top Section -->
         <div class="header">
             <h1>Truyện KTTS</h1>
@@ -634,13 +665,13 @@
 
             <!-- Play Controls -->
             <div class="main-controls">
-                <button class="btn-control btn-skip" id="prevBtn" disabled>
+                <button class="btn-control btn-skip" id="prevBtn">
                     <svg viewBox="0 0 24 24">
                         <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
                     </svg>
                 </button>
 
-                <button class="btn-control btn-play" id="playBtn" disabled>
+                <button class="btn-control btn-play" id="playBtn">
                     <svg viewBox="0 0 24 24" id="playIcon">
                         <path d="M8 5v14l11-7z" />
                     </svg>
@@ -649,7 +680,7 @@
                     </svg>
                 </button>
 
-                <button class="btn-control btn-skip" id="nextBtn" disabled>
+                <button class="btn-control btn-skip" id="nextBtn">
                     <svg viewBox="0 0 24 24">
                         <path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z" />
                     </svg>

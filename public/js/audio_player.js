@@ -64,7 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
         sleepTimerLabel: document.getElementById('sleepTimerLabel'),
         sleepTimerModal: document.getElementById('sleepTimerModal'),
         closeTimerModal: document.getElementById('closeTimerModal'),
-        timerOpts: document.querySelectorAll('.timer-opt')
+        timerOpts: document.querySelectorAll('.timer-opt'),
+        listenBtn: document.querySelector('.btn-listen')
     };
 
     // ==========================================================
@@ -88,7 +89,16 @@ document.addEventListener('DOMContentLoaded', () => {
     function updateURL(storyId, chapterId) {
         if (!storyId) return;
         const newPath = `/audio/${storyId}${chapterId ? '/' + chapterId : ''}`;
-        window.history.pushState({ storyId, chapterId }, '', newPath);
+
+        // Prevent duplicate push
+        if (decodeURIComponent(window.location.pathname) !== decodeURIComponent(newPath)) {
+            window.history.pushState({ storyId, chapterId }, '', newPath);
+        }
+
+        // Update Listen Button
+        if (els.listenBtn) {
+            els.listenBtn.href = `/listen/${storyId}${chapterId ? '/' + chapterId : ''}`;
+        }
     }
 
     // ==========================================================
@@ -115,6 +125,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const urlChapterId = getChapterIdFromURL();
 
             if (urlStoryId) {
+                // Sync URL & Listen Button immediately
+                updateURL(urlStoryId, urlChapterId);
+
                 // If URL has story, load it
                 els.storySelect.value = urlStoryId;
                 // If value set successfully (story exists)
@@ -168,8 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
         els.playBtn.addEventListener('click', togglePlay);
-        if (els.prevBtn) els.prevBtn.addEventListener('click', prevChapter);
-        if (els.nextBtn) els.nextBtn.addEventListener('click', nextChapter);
+        if (els.prevBtn) els.prevBtn.addEventListener('click', skipPrev);
+        if (els.nextBtn) els.nextBtn.addEventListener('click', skipNext);
 
         if (els.speedSelect) {
             els.speedSelect.addEventListener('change', () => {
@@ -649,6 +662,80 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function skipNext() {
+        if (currentSubtitles && currentSubtitles.length > 0) {
+            const currentTime = audioPlayer.currentTime;
+            // Find current sentence index
+            let currentIndex = currentSubtitles.findIndex(sub =>
+                currentTime >= sub.start && currentTime < sub.end
+            );
+
+            // If not found (maybe in silence gap), find next available sentence
+            if (currentIndex === -1) {
+                currentIndex = currentSubtitles.findIndex(sub => sub.start > currentTime);
+                if (currentIndex !== -1) {
+                    audioPlayer.currentTime = currentSubtitles[currentIndex].start;
+                    updateProgress();
+                    return;
+                }
+            }
+
+            // If matched and not the last one
+            if (currentIndex !== -1 && currentIndex < currentSubtitles.length - 1) {
+                audioPlayer.currentTime = currentSubtitles[currentIndex + 1].start;
+                updateProgress();
+                return;
+            }
+        }
+        // Fallback to next chapter
+        nextChapter();
+    }
+
+    function skipPrev() {
+        if (currentSubtitles && currentSubtitles.length > 0) {
+            const currentTime = audioPlayer.currentTime;
+            let currentIndex = currentSubtitles.findIndex(sub =>
+                currentTime >= sub.start && currentTime < sub.end
+            );
+
+            // If in gap, find closest previous
+            if (currentIndex === -1) {
+                // Find the sentence that just ended
+                for (let i = currentSubtitles.length - 1; i >= 0; i--) {
+                    if (currentSubtitles[i].end <= currentTime) {
+                        currentIndex = i;
+                        break;
+                    }
+                }
+            }
+
+            if (currentIndex > 0) {
+                // Check tolerance: if we are > 2 seconds into the sentence, replay current. 
+                // Otherwise go to previous.
+                // But user requested "previous track" usually implies previous item.
+                // Let's plain go to previous sentence for "previous track" semantics, 
+                // or just start of current if it acts like a music player? 
+                // User said "chuyển qua câu tiếp theo" (switch to next sentence). 
+                // Implicitly "previoustrack" -> previous sentence.
+                audioPlayer.currentTime = currentSubtitles[currentIndex - 1].start;
+                updateProgress();
+                return;
+            } else if (currentIndex === 0) {
+                // If at start of first sentence, go to start of it (effectively replay) 
+                // OR go to prev chapter?
+                // Usually prev track at 0:00 goes to prev song. 
+                // Prev track at 0:05 goes to 0:00.
+                if (currentTime - currentSubtitles[0].start > 2) {
+                    audioPlayer.currentTime = currentSubtitles[0].start;
+                    updateProgress();
+                    return;
+                }
+            }
+        }
+        // Fallback
+        prevChapter();
+    }
+
     function nextChapter() {
         savedStartTime = 0;
         const sortedNums = Object.keys(currentChapters).map(Number).sort((a, b) => a - b);
@@ -744,10 +831,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 const userStr = localStorage.getItem('user');
                 if (userStr) {
                     const user = JSON.parse(userStr);
+                    // Partial Update
+                    const partialData = {
+                        [currentStoryId]: allProgress[currentStoryId]
+                    };
+
                     fetch('/api/sync/save', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ key: user.username, data: allProgress })
+                        body: JSON.stringify({ key: user.username, data: partialData })
                     }).catch(e => console.warn("Sync failed", e));
                 }
             } catch (e) { console.warn("Error syncing progress", e); }
@@ -902,8 +994,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
             navigator.mediaSession.setActionHandler('play', togglePlay);
             navigator.mediaSession.setActionHandler('pause', togglePlay);
-            navigator.mediaSession.setActionHandler('previoustrack', prevChapter);
-            navigator.mediaSession.setActionHandler('nexttrack', nextChapter);
+            navigator.mediaSession.setActionHandler('previoustrack', skipPrev);
+            navigator.mediaSession.setActionHandler('nexttrack', skipNext);
         }
     }
 

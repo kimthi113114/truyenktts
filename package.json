@@ -1,6 +1,6 @@
 {
   "name": "content-chapter-scraper",
-  "version": "1.0.10",
+  "version": "1.0.28",
   "type": "module",
   "scripts": {
     "start": "nodemon server.js"

@@ -41,7 +41,7 @@ function updateURL(storyId, chapterId) {
     window.history.pushState({ storyId, chapterId }, '', newURL);
 
     // Update Audio Link
-    const audioLink = document.querySelector('a[href^="/audio"]');
+    const audioLink = document.getElementById('audioLink');
     if (audioLink) {
         let audioURL = '/audio';
         if (storyId) {
@@ -103,10 +103,16 @@ function saveProgress(sentenceIndex = 0, immediate = false) {
             try {
                 const user = JSON.parse(userStr);
                 // Don't wait for this, let it run in background
+
+                // Partial Update: Only send current story
+                const partialData = {
+                    [currentStoryId]: allProgress[currentStoryId]
+                };
+
                 fetch('/api/sync/save', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ key: user.username, data: allProgress })
+                    body: JSON.stringify({ key: user.username, data: partialData })
                 }).catch(e => console.warn("Auto-sync failed", e));
             } catch (e) { }
         }
@@ -240,6 +246,7 @@ async function init() {
 
         if (urlStoryId) {
             select.value = urlStoryId;
+            updateURL(urlStoryId, urlChapterId); // Sync URL and Button immediately
             await loadStory(urlStoryId);
 
             if (urlChapterId && currentChapters[urlChapterId]) {

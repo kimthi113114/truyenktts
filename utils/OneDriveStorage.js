@@ -16,7 +16,9 @@ class OneDriveStorage {
         this.clientId = process.env.ONEDRIVE_CLIENT_ID;
         this.clientSecret = process.env.ONEDRIVE_CLIENT_SECRET;
         this.refreshToken = process.env.ONEDRIVE_REFRESH_TOKEN;
+
         this.accessToken = null;
+        this.tokenExpiresAt = 0; // Timestamp when token expires
 
         // This is the link user provided. 
         // We can use it to find the Drive Item ID if we haven't stored it.
@@ -34,7 +36,16 @@ class OneDriveStorage {
         try {
             await this.refreshAccessToken();
             this.client = Client.init({
-                authProvider: (done) => {
+                authProvider: async (done) => {
+                    // AUTO REFRESH TOKEN IF EXPIRED
+                    if (Date.now() >= this.tokenExpiresAt) {
+                        console.log("🔄 Access Token expired or missing. Refreshing...");
+                        try {
+                            await this.refreshAccessToken();
+                        } catch (err) {
+                            return done(err, null);
+                        }
+                    }
                     done(null, this.accessToken);
                 }
             });
@@ -47,6 +58,12 @@ class OneDriveStorage {
     }
 
     async refreshAccessToken() {
+        console.log("🔄 Requesting new Access Token via Refresh Token...");
+
+        if (!this.refreshToken) {
+            throw new Error("No refresh token available");
+        }
+
         const params = new URLSearchParams();
         params.append('client_id', this.clientId);
         params.append('grant_type', 'refresh_token');
@@ -57,18 +74,41 @@ class OneDriveStorage {
         }
         params.append('redirect_uri', 'http://localhost');
 
-        const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
-            method: 'POST',
-            body: params
-        });
+        try {
+            const response = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+                method: 'POST',
+                body: params
+            });
 
-        const json = await response.json();
-        if (json.error) throw new Error(json.error_description || json.error);
+            const json = await response.json();
 
-        this.accessToken = json.access_token;
-        if (json.refresh_token) {
-            // Optionally update local env with new refresh token if it rotates
-            this.refreshToken = json.refresh_token;
+            if (json.error || !response.ok) {
+                const errorMsg = json.error_description || json.error || JSON.stringify(json);
+                console.error("❌ Token Refresh Error Response:", errorMsg);
+                throw new Error(errorMsg);
+            }
+
+            if (!json.access_token) {
+                console.error("❌ Token response missing access_token:", json);
+                throw new Error("Token response missing access_token");
+            }
+
+            this.accessToken = json.access_token;
+
+            // Calculate expiration (expires_in is usually in seconds)
+            // Default to 1 hour if missing
+            const expiresIn = json.expires_in ? parseInt(json.expires_in) : 3600;
+            this.tokenExpiresAt = Date.now() + (expiresIn * 1000) - 60000; // Buffer 60s
+
+            console.log(`✅ Access Token Refreshed! Expires in ${expiresIn}s.`);
+
+            if (json.refresh_token) {
+                // Optionally update local env with new refresh token if it rotates
+                this.refreshToken = json.refresh_token;
+            }
+        } catch (err) {
+            console.error("❌ Fatal Error refreshing token:", err.message);
+            throw err;
         }
     }
 
@@ -92,7 +132,13 @@ class OneDriveStorage {
                 id: res.id
             };
         } catch (e) {
-            console.error("Error finding shared folder:", e.message);
+            console.error("Error finding shared folder:");
+            if (e.body) {
+                // If it's a Graph Error object
+                e.body.then(b => console.error(JSON.stringify(b, null, 2))).catch(() => console.error(e));
+            } else {
+                console.error(e);
+            }
             return null;
         }
     }
