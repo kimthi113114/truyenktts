@@ -134,6 +134,7 @@ h1 {
 }
 
 input[type="url"],
+input[type="password"],
 input[type="number"],
 input[type="text"],
 input[type="file"],
@@ -304,6 +305,20 @@ button:disabled {
     grid-template-columns: 1fr 1fr;
     gap: 20px;
     margin-top: 15px;
+}
+
+.chapter-block.is-generated .chapter-content-textarea.result {
+    border: 2px solid #8e44ad;
+    /* Viền tím cho ô kết quả */
+    background-color: #fbf4ff;
+}
+
+/* Thay đổi nút bấm khi đã generated */
+.btn-generated {
+    background-color: #5e2d73 !important;
+    /* Tím đậm hơn */
+    font-weight: bold;
+    border: 1px solid #ffd700;
 }
 
 .textarea-wrapper {

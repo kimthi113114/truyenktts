@@ -61,6 +61,13 @@ const dSachTruyen = [
         author: "Tầm Phong Trực Thượng",
         cover: "/toan-cau-thuc-tinh-chi-co-ta-truoc-gio-bo-cuc-tuong-lai.jpg",
         hidden: false
+    },
+    {
+        id: "mymau",
+        title: "Mỹ Mẫu",
+        author: "Tầm Phong Trực Thượng",
+        cover: "",
+        hidden: false
     }
 ];
 

@@ -3,9 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "start": "nodemon server.js"
+    "start": "nodemon server.js --ignore user_data/ --ignore *.json --ignore public/"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "cheerio": "^1.1.2",
     "cors": "^2.8.5",
     "edge-tts": "^1.0.1",
@@ -17,6 +18,8 @@
     "node-edge-tts": "^1.2.8",
     "node-fetch": "2",
     "puppeteer": "^24.23.0",
+    "puppeteer-extra": "^3.3.6",
+    "puppeteer-extra-plugin-stealth": "^2.11.2",
     "uuid": "^13.0.0",
     "ws": "^8.18.3"
   },

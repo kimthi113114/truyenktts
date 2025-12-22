@@ -1,10 +1,13 @@
-Hãy chỉnh sửa đoạn văn khá là Hán Việt dưới đây theo các yêu cầu sau:
-1. Chỉnh câu chữ để thuần Việt, tự nhiên, rõ ràng, dễ hiểu hơn, phù hợp với văn phong tiếng Việt hiện đại, nếu có chữ Hán việt thì chuyển đổi cho thuần việt luôn.
-2. Giữ nguyên nội dung, ý nghĩa, mạch truyện và phong cách hành văn của bản gốc.
-3. Không thay đổi bất kỳ tên riêng hoặc danh từ nào, nếu có tiếng anh thì vẫn giữ nguyên.
-5. Không thêm, lược bỏ, hoặc diễn giải lại nội dung.
-6. Giữ nguyên định dạng xuống dòng, dấu câu, và nhịp văn.
-8. Chỉ ra kết quả không hỏi, chú thích bất cứ gì, chỉ ra dạng text (Không có ký tự đặc biệt hoặc icon hoặc dạng bảng view).
-✅ Mục tiêu:
-Làm cho bản dịch trở nên mượt mà, tự nhiên, thuần Việt hơn nhưng không làm thay đổi bất kỳ chi tiết, tên riêng, đại từ hay phong cách gốc nào. sau đây tôi sẽ gửi văn bản bạn sẽ gửi câu trả lời thôi nhé.
-
+Hãy chỉnh sửa đoạn văn có nhiều từ Hán Việt theo yêu cầu sau:
+1. Chuyển câu văn sang tiếng Việt tự nhiên, rõ ràng, dễ đọc theo văn phong Việt hiện đại.
+   → Nếu có từ Hán Việt, hãy chuyển sang từ thuần Việt tương ứng.
+2. Giữ nguyên hoàn toàn nội dung, ý nghĩa, mạch truyện.
+3. Không thay đổi tên riêng, địa danh, thuật ngữ, đại từ nhân xưng (ví dụ: ta, ngươi...), tiếng Anh giữ nguyên.
+4. Không thêm, không lược bỏ nội dung gốc.
+5. Giữ nguyên format đoạn văn: xuống dòng, dấu câu, nhịp văn.
+6. Khi trả kết quả **chỉ xuất ra văn bản đã chỉnh sửa dạng text**, không ghi chú, không giải thích, không kèm biểu tượng hay định dạng đặc biệt.
+7. Xuống hàng cho hợp lý. mỗi lần xuống dòng thì phải 2 lần xuống dòng.
+Mục tiêu
+Làm cho đoạn văn mượt mà, thuần Việt, dễ hiểu hơn, nhưng **không thay đổi bất kỳ chi tiết hay phong cách gốc của truyện**.
+---
+Khi tôi gửi văn bản tiếp theo, bạn chỉ cần xuất kết quả theo đúng yêu cầu trên.

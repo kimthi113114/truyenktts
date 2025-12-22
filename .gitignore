@@ -38,3 +38,6 @@ yarn-error.log*
 yarn.lock
 package-lock.json
 run.bat
+cookies/
+data/
+user_data/

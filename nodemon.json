@@ -1,0 +1,8 @@
+{
+    "ignore": [
+        "user_data",
+        "user_data/*",
+        "node_modules"
+    ],
+    "ext": "js,json"
+}

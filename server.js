@@ -17,7 +17,7 @@ app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
 
 app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "listen.html"));
+    res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
 app.use(express.static(path.join(__dirname, "public")));
@@ -29,6 +29,10 @@ import exportEpubUnTocRoute from "./routes/exportEpubUnToc.js";
 import ttsRoute from "./routes/tts.js";
 import ttsLiveRoute from "./routes/ttsLive.js";
 import videoExportRoute from "./routes/videoExport.js";
+import geminiRoute from "./routes/gemini.js";
+
+import copilotRoute from "./routes/copilot.js";
+import chatgptRoute from "./routes/chatgpt.js";
 
 app.use("/", extractRoute);
 app.use("/", exportEpubRoute);
@@ -36,6 +40,9 @@ app.use("/", exportEpubUnTocRoute);
 app.use("/api", ttsRoute);
 app.use("/api", ttsLiveRoute);
 app.use("/api", videoExportRoute);
+app.use("/api", geminiRoute);
+app.use("/api", copilotRoute);
+app.use("/api", chatgptRoute);
 
 app.get("/api/stories", (req, res) => {
     res.json(dSachTruyen);
