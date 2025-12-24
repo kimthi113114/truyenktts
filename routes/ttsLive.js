@@ -7,7 +7,7 @@ import getMp3Duration from "get-mp3-duration";
 
 const router = express.Router();
 
-function splitText(text, maxLength = 2000) {
+function splitTextBySentences(text, maxLength = 2000) {
     if (text.length <= maxLength) return [text];
 
     const chunks = [];
@@ -17,59 +17,56 @@ function splitText(text, maxLength = 2000) {
     for (let i = 0; i < sentences.length; i++) {
         const sentence = sentences[i];
         if ((currentChunk + sentence).length > maxLength) {
-            if (currentChunk) chunks.push(currentChunk);
+            if (currentChunk) chunks.push(currentChunk.trim());
             currentChunk = sentence;
         } else {
             currentChunk += sentence;
         }
     }
-    if (currentChunk) chunks.push(currentChunk);
+    if (currentChunk) chunks.push(currentChunk.trim());
     return chunks;
 }
 
-// function splitText(text, maxLength = 2000, minLineLength = 10) {
-//     // 1. split theo \n
-//     let lines = text
-//         .split('\n')
-//         .map(line => line.trim())
-//         .filter(Boolean);
+function splitText(text, maxLength = 2000, minLineLength = 10) {
+    // 1. split theo \n
+    let lines = text
+        .split('\n')
+        .map(line => line.trim())
+        .filter(Boolean);
 
-//     // 2. thêm dấu . nếu thiếu
-//     lines = lines.map(line =>
-//         /[.?!:]$/.test(line) ? line : line + "."
-//     );
+    // 2. thêm dấu . nếu thiếu
+    lines = lines.map(line =>
+        /[.?!:]$/.test(line) ? line : line + "."
+    );
 
-//     // 3. merge dòng ngắn
-//     const merged = [];
-//     for (let i = 0; i < lines.length; i++) {
-//         const line = lines[i];
+    // 3. merge dòng ngắn
+    const merged = [];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
 
-//         if (line.length <= minLineLength && i + 1 < lines.length) {
-//             // gộp với dòng tiếp theo
-//             lines[i + 1] = line + " " + lines[i + 1];
-//         } else {
-//             merged.push(line);
-//         }
-//     }
+        if (line.length <= minLineLength && i + 1 < lines.length) {
+            // gộp với dòng tiếp theo
+            lines[i + 1] = line + " " + lines[i + 1];
+        } else {
+            merged.push(line);
+        }
+    }
 
-//     // 4. chia theo maxLength
-//     const chunks = [];
-//     let current = "";
+    // 4. chia theo maxLength
+    const chunks = [];
 
-//     for (const line of merged) {
-//         const piece = line + "\n";
-//         if ((current + piece).length > maxLength) {
-//             chunks.push(current.trimEnd());
-//             current = piece;
-//         } else {
-//             current += piece;
-//         }
-//     }
+    for (const line of merged) {
+        const piece = line + "\n";
+        if (piece.length <= maxLength) {
+            chunks.push(piece.trimEnd());
+        } else {
+            let _chunk = splitTextBySentences(piece, maxLength);
+            chunks.push(..._chunk);
+        }
+    }
 
-//     if (current) chunks.push(current.trimEnd());
-
-//     return chunks;
-// }
+    return chunks;
+}
 
 
 /**
@@ -91,7 +88,7 @@ router.post("/tts-live", async (req, res) => {
         const rateStr = speedPercent >= 0 ? `+${speedPercent}%` : `${speedPercent}%`;
 
         // 2. Split text
-        const chunks = splitText(sanitizedText, 200);
+        const chunks = splitText(sanitizedText, 200, 10);
 
         // Hàm xử lý từng chunk (Chạy độc lập)
         const processChunk = async (chunk, index) => {
@@ -166,7 +163,6 @@ router.post("/tts-live-stream", async (req, res) => {
 
         // 1. Xử lý input
         const sanitizedText = text
-            .replace(/\s+/g, ' ')         // Xóa khoảng trắng thừa
             .trim();
 
         // Convert speed sang định dạng của EdgeTTS (VD: +20%, -10%)
@@ -174,7 +170,7 @@ router.post("/tts-live-stream", async (req, res) => {
         const rateStr = speedPercent >= 0 ? `+${speedPercent}%` : `${speedPercent}%`;
 
         // 2. Chia nhỏ text (Sử dụng hàm thông minh ở trên)
-        const chunks = splitText(sanitizedText, 100);
+        const chunks = splitText(sanitizedText, 150, 10);
         const totalChunks = chunks.length;
         let completedChunks = 0;
 
@@ -191,18 +187,18 @@ router.post("/tts-live-stream", async (req, res) => {
 
             while (retries > 0) {
                 let lastdata = chunk
-                    .replaceAll('【', '.')
-                    .replaceAll('】', '.')
-                    .replaceAll('[', '.')
-                    .replaceAll(']', '.')
-                    .replaceAll('(', '.')
-                    .replaceAll(')', '.')
-                    .replaceAll('”', '.')
-                    .replaceAll('“', '.')
-                    .replaceAll('"', '.')
-                    .replaceAll('"', '.')
+                    // 1. Xử lý ký hiệu x, × kèm con số (Ví dụ: x100, × 500)
+                    .replace(/[x×]\s*(\d+)/g, ' với số lượng $1 ')
+
+                    // 2. Gom nhóm các ký tự cần đổi thành dấu chấm vào một Regex để code gọn hơn
+                    .replace(/[【】\[\]\(\)”“"]/g, '.')
+
+                    // 3. Xử lý các phép tính
                     .replaceAll("+", " cộng ")
-                    .replaceAll("-", " trừ ").trim();
+                    .replaceAll("-", " trừ ")
+
+                    // 4. Làm sạch khoảng trắng thừa
+                    .trim();
                 try {
                     const tts = new EdgeTTS({ voice, rate: rateStr, volume: "+0%" });
                     await tts.ttsPromise(lastdata, tempFile);

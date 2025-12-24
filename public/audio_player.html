@@ -578,6 +578,10 @@
         .hidden {
             display: none !important;
         }
+
+        .no-zoom {
+            touch-action: manipulation;
+        }
     </style>
 </head>
 
@@ -664,7 +668,7 @@
             </div>
 
             <!-- Play Controls -->
-            <div class="main-controls">
+            <div class="main-controls no-zoom">
                 <button class="btn-control btn-skip" id="prevBtn">
                     <svg viewBox="0 0 24 24">
                         <path d="M6 6h2v12H6zm3.5 6l8.5 6V6z" />
@@ -688,8 +692,8 @@
             </div>
 
             <!-- Extra Settings (Voice & Sleep Timer) -->
-            <div class="settings-row">
-                <button id="toggleLyricsBtn" class="btn-toggle-lyrics" aria-label="Hiện lời/sub">
+            <div class="settings-row no-zoom">
+                <button id="toggleLyricsBtn" class="btn-toggle-lyrics " aria-label="Hiện lời/sub">
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
                         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
