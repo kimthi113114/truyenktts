@@ -582,6 +582,107 @@
         .no-zoom {
             touch-action: manipulation;
         }
+
+        /* --- COLLAPSE CONTROLS FEATURE --- */
+        .btn-collapse-controls {
+            position: absolute;
+            top: -15px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 36px;
+            height: 24px;
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-bottom: none;
+            border-radius: 12px 12px 0 0;
+            color: var(--text-sub);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            z-index: 10;
+            margin-top: -10px
+        }
+
+
+        .btn-collapse-controls svg {
+            transition: transform 0.3s ease;
+        }
+
+        .btn-collapse-controls svg {
+            transform: rotate(180deg);
+        }
+
+        .btn-collapse-controls.collapsed svg {
+            transform: rotate(0deg);
+        }
+
+        /* Collapsed state for controls-area */
+        .controls-area.collapsed {
+            padding: 12px 20px;
+        }
+
+        .controls-area.collapsed .selection-group,
+        .controls-area.collapsed .progress-container,
+        .controls-area.collapsed .time-info,
+        .controls-area.collapsed .settings-row {
+            display: none;
+        }
+
+        .controls-area.collapsed .main-controls {
+            margin: 0;
+        }
+
+        /* Expanded visual-area when controls collapsed */
+        .visual-area.expanded {
+            flex: 2;
+        }
+
+        .visual-area.expanded .subtitle-container {
+            height: calc(100dvh - 280px);
+            max-height: 500px;
+        }
+
+        .visual-area.expanded .album-art {
+            width: 250px;
+            height: 250px;
+        }
+
+        /* Smooth transitions - optimized for performance */
+        .controls-area {
+            transition: padding 0.3s ease-out;
+            will-change: padding;
+        }
+
+        .visual-area {
+            transition: flex 0.3s ease-out;
+            will-change: flex;
+        }
+
+        .subtitle-container {
+            transition: height 0.3s ease-out;
+            will-change: height;
+        }
+
+        .album-art {
+            transition: width 0.3s ease-out, height 0.3s ease-out;
+            will-change: width, height;
+        }
+
+        /* Hide/show elements instantly instead of animating */
+        .controls-area.collapsed .selection-group,
+        .controls-area.collapsed .progress-container,
+        .controls-area.collapsed .time-info,
+        .controls-area.collapsed .settings-row {
+            opacity: 0;
+            visibility: hidden;
+            height: 0;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            transition: opacity 0.15s ease-out;
+        }
     </style>
 </head>
 
@@ -642,7 +743,14 @@
         </div>
 
         <!-- Bottom Section: Controls -->
-        <div class="controls-area" style="position: relative;">
+        <div class="controls-area" id="controlsArea" style="position: relative;">
+            <!-- Collapse Toggle Button -->
+            <button class="btn-collapse-controls" id="collapseControlsBtn" aria-label="Thu gọn điều khiển">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none"
+                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <polyline points="18 15 12 9 6 15"></polyline>
+                </svg>
+            </button>
             <!-- Selects -->
             <div class="selection-group">
                 <select id="storySelect">
@@ -772,6 +880,31 @@
     </div>
 
     <script src="/js/audio_player.js"></script>
+    <script>
+        // Collapse Controls Feature
+        (function () {
+            const collapseBtn = document.getElementById('collapseControlsBtn');
+            const controlsArea = document.getElementById('controlsArea');
+            const visualArea = document.querySelector('.visual-area');
+
+            // Load saved state from localStorage
+            const isCollapsed = localStorage.getItem('controlsCollapsed') === 'true';
+            if (isCollapsed) {
+                controlsArea.classList.add('collapsed');
+                collapseBtn.classList.add('collapsed');
+                visualArea.classList.add('expanded');
+            }
+
+            collapseBtn.addEventListener('click', function () {
+                const collapsed = controlsArea.classList.toggle('collapsed');
+                collapseBtn.classList.toggle('collapsed');
+                visualArea.classList.toggle('expanded');
+
+                // Save state to localStorage
+                localStorage.setItem('controlsCollapsed', collapsed);
+            });
+        })();
+    </script>
 </body>
 
 </html>

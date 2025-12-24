@@ -1,9 +1,11 @@
 {
   "name": "content-chapter-scraper",
-  "version": "1.0.34",
+  "version": "2.0.7",
   "type": "module",
+  "license": "MIT",
   "scripts": {
-    "start": "nodemon server.js"
+    "start": "nodemon server.js",
+    "deploy": "./run.bat"
   },
   "dependencies": {
     "@microsoft/microsoft-graph-client": "^3.0.7",

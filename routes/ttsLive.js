@@ -36,7 +36,7 @@ function splitText(text, maxLength = 2000, minLineLength = 10) {
 
     // 2. thêm dấu . nếu thiếu
     lines = lines.map(line =>
-        /[.?!:]$/.test(line) ? line : line + "."
+        /[.?!:]$/.test(line) ? line : line
     );
 
     // 3. merge dòng ngắn

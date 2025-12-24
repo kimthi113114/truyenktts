@@ -248,7 +248,7 @@ async function init() {
             select.value = urlStoryId;
             updateURL(urlStoryId, urlChapterId); // Sync URL and Button immediately
             await loadStory(urlStoryId);
-
+            debugger;
             if (urlChapterId && currentChapters[urlChapterId]) {
                 // Direct link to chapter
                 loadChapter(urlChapterId);
@@ -316,6 +316,9 @@ function extractChapters(text) {
     let m;
     while ((m = chapterRegex.exec(standardizedText)) !== null) {
         const num = parseInt(m[1], 10);
+        if (num === 307 || num === 306) {
+            debugger;
+        }
         const title = (m[2] || '').trim();
         const content = (m[3] || '').trim();
         if (!Number.isNaN(num)) chapters[num] = { title, content };
