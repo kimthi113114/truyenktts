@@ -248,7 +248,6 @@ async function init() {
             select.value = urlStoryId;
             updateURL(urlStoryId, urlChapterId); // Sync URL and Button immediately
             await loadStory(urlStoryId);
-            debugger;
             if (urlChapterId && currentChapters[urlChapterId]) {
                 // Direct link to chapter
                 loadChapter(urlChapterId);
@@ -309,22 +308,6 @@ async function stopPlaying() {
     }
 }
 
-function extractChapters(text) {
-    const chapters = {};
-    const standardizedText = '\n' + (text || '').trim() + '\n';
-    const chapterRegex = /\n===\s*Chương\s*(\d+)(?::\s*(.*?))?\s*===\s*([\s\S]*?)(?=\n===\s*Chương|$)/gi;
-    let m;
-    while ((m = chapterRegex.exec(standardizedText)) !== null) {
-        const num = parseInt(m[1], 10);
-        if (num === 307 || num === 306) {
-            debugger;
-        }
-        const title = (m[2] || '').trim();
-        const content = (m[3] || '').trim();
-        if (!Number.isNaN(num)) chapters[num] = { title, content };
-    }
-    return chapters;
-}
 
 async function loadStory(storyId) {
     if (!storyId) return;
@@ -335,16 +318,28 @@ async function loadStory(storyId) {
     cachedNextChapterId = null;
     cachedNextSentences = [];
 
-    showToast("Đang tải truyện...", "warning");
+    showToast("Đang tải danh sách chương...", "warning");
     document.getElementById('chapterList').innerHTML = '<div style="text-align:center;padding:20px">⏳ Đang tải...</div>';
 
     try {
-        const resp = await fetch(`/api/story-content/${storyId}`);
-        if (!resp.ok) throw new Error("Lỗi tải truyện");
+        // [MODIFIED] Use Offline API to get chapter list only
+        const resp = await fetch(`/api/offline/story/${storyId}/chapters`);
+        if (!resp.ok) throw new Error("Lỗi tải danh sách chương");
         const data = await resp.json();
-        currentChapters = extractChapters(data.content);
+
+        // Conversion to map format consistent with previous logic
+        currentChapters = {};
+        if (data.chapters && Array.isArray(data.chapters)) {
+            data.chapters.forEach(c => {
+                currentChapters[c.chapter] = {
+                    title: c.title,
+                    content: null // Content loaded on demand
+                };
+            });
+        }
+
         renderChapterList();
-        showToast("Đã tải xong truyện!", "success");
+        showToast("Đã tải xong danh sách chương!", "success");
     } catch (err) {
         console.error(err);
         showToast("Lỗi: " + err.message, "error");
@@ -376,7 +371,7 @@ function renderChapterList() {
     });
 }
 
-function loadChapter(num, fromRestore = false) {
+async function loadChapter(num, fromRestore = false) {
     currentChapterId = num;
     updateURL(currentStoryId, num);
     // Smart cleanup: Keep current and next chapter, remove others
@@ -394,6 +389,30 @@ function loadChapter(num, fromRestore = false) {
         }
     }
     const ch = currentChapters[num];
+    if (!ch) return;
+
+    // [MODIFIED] Load Content on Demand
+    if (!ch.content) {
+        showToast(`Đang tải nội dung chương ${num}...`, "warning");
+        try {
+            // Note: API expects just the ID if it appends .txt itself due to our previous fix, 
+            // BUT we should verify. The user made the API do `filename + ".txt"`.
+            // So calling with `currentStoryId` (e.g. ChuNhaADi) works.
+            const resp = await fetch(`/api/offline/story/${currentStoryId}/chapter/${num}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                ch.content = data.content; // Cache it
+                ch.title = data.title || ch.title; // Update title
+            } else {
+                throw new Error("Không tải được nội dung");
+            }
+        } catch (e) {
+            console.error(e);
+            showToast("Lỗi tải nội dung chương!", "error");
+            return;
+        }
+    }
+
     document.getElementById('currentChapterTitle').textContent = `Chương ${num}: ${ch.title}`;
     const readingArea = document.getElementById('readingArea');
 
@@ -432,6 +451,47 @@ function loadChapter(num, fromRestore = false) {
         saveProgress(0, true); // Immediate save on chapter load
     }
     updateMediaSession();
+    preloadNextChapter(num);
+}
+
+async function preloadNextChapter(currentId) {
+    const nextId = getNextChapterId(currentId);
+    if (!nextId) return;
+
+    // Check if next chapter content is already loaded
+    if (!currentChapters[nextId] || !currentChapters[nextId].content) {
+        console.log(`[Preload] Fetching content for chapter ${nextId}...`);
+        try {
+            const resp = await fetch(`/api/offline/story/${currentStoryId}/chapter/${nextId}`);
+            if (resp.ok) {
+                const data = await resp.json();
+                if (!currentChapters[nextId]) {
+                    currentChapters[nextId] = { title: data.title, content: data.content };
+                } else {
+                    currentChapters[nextId].content = data.content;
+                    currentChapters[nextId].title = data.title || currentChapters[nextId].title;
+                }
+                console.log(`[Preload] Content for chapter ${nextId} loaded.`);
+            }
+        } catch (err) {
+            console.warn("[Preload] Failed to preload next chapter content:", err);
+            return; // Can't proceed without content
+        }
+    }
+
+    // Proactively preload the first few sentences of the next chapter
+    const sentences = parseChapterSentences(nextId);
+    if (sentences && sentences.length > 0) {
+        console.log(`[Preload] Prefetching audio for first few sentences of chapter ${nextId}...`);
+        // Preload first 5 sentences
+        const PRELOAD_COUNT = 5;
+        for (let i = 0; i < Math.min(sentences.length, PRELOAD_COUNT); i++) {
+            // getAudioUrl returns a promise that fetches/buffers the audio
+            getAudioUrl(sentences[i], i, nextId).catch(e =>
+                console.warn(`[Preload] Audio prefetch failed for chapter ${nextId}, index ${i}:`, e)
+            );
+        }
+    }
 }
 
 function prevChapter(event) {

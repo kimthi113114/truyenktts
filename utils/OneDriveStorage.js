@@ -214,6 +214,48 @@ class OneDriveStorage {
             return { success: false, error: e.message };
         }
     }
+
+    /**
+     * Recursively download all contents from a OneDrive folder to a local path
+     */
+    async downloadFolder(onedriveFolderId, driveId, localBasePath, onProgress = () => { }) {
+        if (!this.client) throw new Error("OneDrive client not initialized");
+
+        // Ensure local directory exists
+        if (!fs.existsSync(localBasePath)) {
+            fs.mkdirSync(localBasePath, { recursive: true });
+        }
+
+        const children = await this.listChildren(onedriveFolderId, driveId);
+        onProgress({ type: 'log', message: `📂 Found ${children.length} items in folder` });
+        console.log(`📂 Downloading folder contents to: ${localBasePath} (${children.length} items)`);
+
+        for (const item of children) {
+            const localPath = path.join(localBasePath, item.name);
+
+            if (item.folder) {
+                // Recursive call for subfolders
+                onProgress({ type: 'log', message: `📂 Entering folder: ${item.name}` });
+                await this.downloadFolder(item.id, driveId, localPath, onProgress);
+            } else if (item.file) {
+                // Download file
+                const downloadUrl = item['@microsoft.graph.downloadUrl'];
+                if (downloadUrl) {
+                    onProgress({ type: 'file', name: item.name, status: 'downloading' });
+                    console.log(`  📄 Downloading file: ${item.name} -> ${localPath}`);
+
+                    const response = await fetch(downloadUrl);
+                    if (!response.ok) {
+                        onProgress({ type: 'error', message: `Failed ${item.name}` });
+                        throw new Error(`Failed to download ${item.name}: ${response.statusText}`);
+                    }
+                    const buffer = await response.arrayBuffer();
+                    fs.writeFileSync(localPath, Buffer.from(buffer));
+                    onProgress({ type: 'file', name: item.name, status: 'done' });
+                }
+            }
+        }
+    }
 }
 
 export default new OneDriveStorage();

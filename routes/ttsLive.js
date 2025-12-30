@@ -7,6 +7,13 @@ import getMp3Duration from "get-mp3-duration";
 
 const router = express.Router();
 
+// -----------------------------------------------------------------------------
+// [UTILS] Text Processing Helpers
+// -----------------------------------------------------------------------------
+
+/**
+ * Split long text by sentences to stay within length limits
+ */
 function splitTextBySentences(text, maxLength = 2000) {
     if (text.length <= maxLength) return [text];
 
@@ -27,259 +34,194 @@ function splitTextBySentences(text, maxLength = 2000) {
     return chunks;
 }
 
-function splitText(text, maxLength = 2000, minLineLength = 10) {
-    // 1. split theo \n
+/**
+ * Advanced text splitting for optimal TTS quality
+ */
+function splitText(text, maxLength = 150, minLineLength = 10) {
+    // 1. Split by newlines
     let lines = text
         .split('\n')
         .map(line => line.trim())
         .filter(Boolean);
 
-    // 2. thêm dấu . nếu thiếu
-    lines = lines.map(line =>
-        /[.?!:]$/.test(line) ? line : line
-    );
-
-    // 3. merge dòng ngắn
+    // 2. Merge short lines with next ones
     const merged = [];
     for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
-
         if (line.length <= minLineLength && i + 1 < lines.length) {
-            // gộp với dòng tiếp theo
             lines[i + 1] = line + " " + lines[i + 1];
         } else {
             merged.push(line);
         }
     }
 
-    // 4. chia theo maxLength
+    // 3. Ensure chunks stay within maxLength
     const chunks = [];
-
     for (const line of merged) {
-        const piece = line + "\n";
-        if (piece.length <= maxLength) {
-            chunks.push(piece.trimEnd());
+        if (line.length <= maxLength) {
+            chunks.push(line);
         } else {
-            let _chunk = splitTextBySentences(piece, maxLength);
-            chunks.push(..._chunk);
+            const pieces = splitTextBySentences(line, maxLength);
+            chunks.push(...pieces);
         }
     }
 
     return chunks;
 }
 
+// -----------------------------------------------------------------------------
+// [CORE] TTS Generation Logic
+// -----------------------------------------------------------------------------
+
+/**
+ * Process a single text chunk into an MP3 buffer
+ */
+async function processTtsChunk(chunk, index, config) {
+    const { voice, rate, onProgress } = config;
+    if (!chunk.trim()) return null;
+
+    const tempFile = path.join(os.tmpdir(), `tts_live_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}.mp3`);
+    let retries = 5;
+    let lastError;
+
+    while (retries > 0) {
+        try {
+            const tts = new EdgeTTS({ voice, rate, volume: "+0%" });
+            await tts.ttsPromise(chunk, tempFile);
+
+            // Wait briefly for file system to sync
+            await new Promise(r => setTimeout(r, 50));
+
+            // Read buffer and clean up
+            const buffer = await fs.promises.readFile(tempFile);
+            await fs.promises.unlink(tempFile).catch(() => { });
+
+            if (onProgress) onProgress();
+
+            return buffer;
+        } catch (err) {
+            lastError = err;
+            retries--;
+            if (retries > 0) await new Promise(r => setTimeout(r, 500));
+        }
+    }
+
+    if (fs.existsSync(tempFile)) await fs.promises.unlink(tempFile).catch(() => { });
+    throw lastError || new Error(`Failed to generate chunk ${index}`);
+}
+
+// -----------------------------------------------------------------------------
+// [API] Endpoints
+// -----------------------------------------------------------------------------
 
 /**
  * POST /api/tts-live
- * Generate TTS audio without saving to disk (concatenates chunks for long text)
- * Returns base64 encoded audio data
+ * Traditional one-shot TTS response
  */
 router.post("/tts-live", async (req, res) => {
     try {
         const { text, voice = "vi-VN-NamMinhNeural", speed = 1.0 } = req.body;
+        if (!text) return res.status(400).json({ error: "Text is required" });
 
-        if (!text) {
-            return res.status(400).json({ error: "Text is required" });
-        }
-
-        // 1. Sanitize & Config
+        // Original simple sanitization as requested
         const sanitizedText = text.replace(/["'`«»""'']/g, '').replace(/:/g, ',').replace(/\s+/g, ' ').trim();
+
         const speedPercent = Math.round((speed - 1) * 100);
-        const rateStr = speedPercent >= 0 ? `+${speedPercent}%` : `${speedPercent}%`;
+        const rate = speedPercent >= 0 ? `+${speedPercent}%` : `${speedPercent}%`;
 
-        // 2. Split text
+        // Split and process parallelly
         const chunks = splitText(sanitizedText, 200, 10);
+        const buffers = await Promise.all(
+            chunks.map((chunk, i) => processTtsChunk(chunk, i, { voice, rate }))
+        );
 
-        // Hàm xử lý từng chunk (Chạy độc lập)
-        const processChunk = async (chunk, index) => {
-            if (!chunk.trim()) return null;
-
-            const tempFile = path.join(os.tmpdir(), `tts_live_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}.mp3`);
-            let retries = 10;
-            let lastError;
-
-            // Logic Retry
-            while (retries > 0) {
-                try {
-                    const tts = new EdgeTTS({ voice, rate: rateStr, volume: "+0%" });
-                    await tts.ttsPromise(chunk, tempFile);
-
-                    // Đợi file được ghi xong hẳn (file system latency)
-                    await new Promise(r => setTimeout(r, 100));
-
-                    // Đọc file ra buffer
-                    const buffer = await fs.promises.readFile(tempFile);
-
-                    // Xóa file tạm ngay lập tức sau khi đọc xong để dọn rác
-                    await fs.promises.unlink(tempFile).catch(() => { });
-
-                    return buffer;
-                } catch (err) {
-                    lastError = err;
-                    retries--;
-                    console.warn(`Chunk ${index} failed, retrying... (${retries} left)`, err.message);
-                    if (retries > 0) await new Promise(r => setTimeout(r, 1000));
-                }
-            }
-
-            // Nếu hết retry mà vẫn lỗi, thử xóa file rác nếu còn tồn tại
-            if (fs.existsSync(tempFile)) await fs.promises.unlink(tempFile).catch(() => { });
-            throw lastError || new Error(`Failed to generate chunk ${index}`);
-        };
-
-        // 3. Chạy song song tất cả các chunk (Concurrency)
-        // Promise.all vẫn giữ đúng thứ tự mảng trả về so với mảng input
-        const buffers = await Promise.all(chunks.map((chunk, i) => processChunk(chunk, i)));
-
-        // 4. Lọc bỏ các chunk null (nếu có) và nối lại
-        const validBuffers = buffers.filter(b => b !== null);
-        const finalBuffer = Buffer.concat(validBuffers);
-        const base64Audio = finalBuffer.toString('base64');
-
+        const finalBuffer = Buffer.concat(buffers.filter(Boolean));
         res.json({
             success: true,
-            audio: base64Audio,
+            audio: finalBuffer.toString('base64'),
             mimeType: 'audio/mpeg'
         });
 
     } catch (err) {
-        console.error("TTS Live error:", err);
-        res.status(500).json({
-            error: "Failed to generate TTS",
-            details: err.message
-        });
+        console.error("TTS Live Error:", err);
+        res.status(500).json({ error: "Failed to generate TTS", details: err.message });
     }
 });
 
+/**
+ * POST /api/tts-live-stream
+ * Streaming mode with progress reporting and subtitles
+ */
 router.post("/tts-live-stream", async (req, res) => {
     try {
         const { text, voice = "vi-VN-NamMinhNeural", speed = 1.0 } = req.body;
-
         if (!text) return res.status(400).json({ error: "Text is required" });
 
-        // Cấu hình Header để Stream dữ liệu JSON từng dòng về client
+        // Enable streaming headers
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.setHeader('Transfer-Encoding', 'chunked');
 
-        // 1. Xử lý input
-        const sanitizedText = text
-            .trim();
-
-        // Convert speed sang định dạng của EdgeTTS (VD: +20%, -10%)
+        const sanitizedText = text.trim();
         const speedPercent = Math.round((speed - 1) * 100);
-        const rateStr = speedPercent >= 0 ? `+${speedPercent}%` : `${speedPercent}%`;
+        const rate = speedPercent >= 0 ? `+${speedPercent}%` : `${speedPercent}%`;
 
-        // 2. Chia nhỏ text (Sử dụng hàm thông minh ở trên)
         const chunks = splitText(sanitizedText, 150, 10);
         const totalChunks = chunks.length;
         let completedChunks = 0;
 
-        // Hàm xử lý từng chunk: Tạo Audio -> Đọc Buffer -> Xóa file tạm
-        const processChunk = async (chunk, index) => {
-            if (!chunk.trim()) return null;
-
-            // Tạo tên file tạm ngẫu nhiên để tránh trùng lặp
-            const tempFileName = `tts_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}.mp3`;
-            const tempFile = path.join(os.tmpdir(), tempFileName);
-
-            let retries = 5; // Thử lại tối đa 3 lần nếu lỗi mạng
-            let lastError;
-
-            while (retries > 0) {
-                let lastdata = chunk
-                    // 1. Xử lý ký hiệu x, × kèm con số (Ví dụ: x100, × 500)
-                    .replace(/[x×]\s*(\d+)/g, ' với số lượng $1 ')
-
-                    // 2. Gom nhóm các ký tự cần đổi thành dấu chấm vào một Regex để code gọn hơn
-                    .replace(/[【】\[\]\(\)”“"]/g, '.')
-
-                    // 3. Xử lý các phép tính
-                    .replaceAll("+", " cộng ")
-                    .replaceAll("-", " trừ ")
-
-                    // 4. Làm sạch khoảng trắng thừa
-                    .trim();
-                try {
-                    const tts = new EdgeTTS({ voice, rate: rateStr, volume: "+0%" });
-                    await tts.ttsPromise(lastdata, tempFile);
-
-                    // Đợi một chút để file chắc chắn được ghi xong (an toàn cho hệ điều hành)
-                    await new Promise(r => setTimeout(r, 50));
-
-                    // Đọc file thành Buffer
-                    const buffer = await fs.promises.readFile(tempFile);
-
-                    // Xóa file tạm ngay sau khi đọc
-                    await fs.promises.unlink(tempFile).catch(() => { });
-
-                    // --- BÁO CÁO TIẾN ĐỘ ---
-                    completedChunks++;
-                    const percent = Math.round((completedChunks / totalChunks) * 100);
-                    // Gửi progress về client
-                    res.write(JSON.stringify({ type: 'progress', val: percent }) + '\n');
-
-                    return buffer;
-                } catch (err) {
-
-                    console.group(`Error processing chunk ${index}:`, err);
-                    console.error(`chunk: ${lastdata}`);
-                    console.groupEnd();
-                    lastError = err;
-                    retries--;
-                    if (retries > 0) await new Promise(r => setTimeout(r, 500));
-                }
-            }
-
-            // Dọn dẹp nếu thất bại
-            if (fs.existsSync(tempFile)) await fs.promises.unlink(tempFile).catch(() => { });
-            console.error(`Error chunk ${index}:`, lastError);
-            return null; // Trả về null nếu chunk này lỗi, nhưng không dừng toàn bộ process
+        // Progress callback to stream updates to client
+        const onProgress = () => {
+            completedChunks++;
+            const percent = Math.round((completedChunks / totalChunks) * 100);
+            res.write(JSON.stringify({ type: 'progress', val: percent }) + '\n');
         };
 
-        // 3. Chạy song song (Promise.all) để tối ưu tốc độ
-        // Lưu ý: Map giữ đúng thứ tự mảng, nên Audio ghép lại sẽ đúng thứ tự
-        const buffers = await Promise.all(chunks.map((chunk, i) => processChunk(chunk, i)));
+        // Process all chunks parallelly with internal complex logic for each chunk as request
+        const buffers = await Promise.all(
+            chunks.map((chunk, i) => {
+                // Restore original complex cleaning logic for stream chunks
+                const cleanedChunk = chunk
+                    .replace(/[x×]\s*(\d+)/g, ' với số lượng $1 ')
+                    .replace(/[【】\[\]\(\)”“"]/g, '.')
+                    .replaceAll("+", " cộng ")
+                    .replaceAll("-", " trừ ")
+                    .trim();
 
-        // 4. Ghép Audio và Tạo Subtitle
+                return processTtsChunk(cleanedChunk, i, { voice, rate, onProgress });
+            })
+        );
+
+        // Generate final buffer and subtitles mapping
         const validBuffers = [];
         const subtitles = [];
-        let currentTimestamp = 0; // Thời gian tính bằng ms
+        let currentTimestamp = 0;
 
         buffers.forEach((buffer, index) => {
             if (buffer) {
                 validBuffers.push(buffer);
-
-                // --- QUAN TRỌNG: TÍNH DURATION ---
                 const durationMs = getMp3Duration(buffer);
-
-                // Đẩy vào mảng subtitle
                 subtitles.push({
                     text: chunks[index],
-                    start: currentTimestamp / 1000,          // Giây bắt đầu
-                    end: (currentTimestamp + durationMs) / 1000 // Giây kết thúc
+                    start: currentTimestamp / 1000,
+                    end: (currentTimestamp + durationMs) / 1000
                 });
-
                 currentTimestamp += durationMs;
             }
         });
 
-        // Nối tất cả buffer thành 1 file duy nhất
+        // Send final chunk with audio data
         const finalBuffer = Buffer.concat(validBuffers);
-        const base64Audio = finalBuffer.toString('base64');
-
-        // 5. Gửi kết quả cuối cùng
         res.write(JSON.stringify({
             type: 'done',
-            audio: base64Audio,
+            audio: finalBuffer.toString('base64'),
             mimeType: 'audio/mpeg',
-            subtitles: subtitles // Trả về mảng subtitle cho client dùng
+            subtitles: subtitles
         }) + '\n');
 
-        res.end(); // Kết thúc stream
+        res.end();
 
     } catch (err) {
         console.error("TTS Live Stream Error:", err);
-        // Nếu lỗi xảy ra khi đang stream, gửi json error
         if (!res.headersSent) {
             res.status(500).json({ error: err.message });
         } else {
@@ -288,6 +230,5 @@ router.post("/tts-live-stream", async (req, res) => {
         }
     }
 });
-
 
 export default router;

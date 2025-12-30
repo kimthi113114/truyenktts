@@ -1,0 +1,233 @@
+openapi: 3.0.0
+info:
+  title: Truyen KTTS API Documentation
+  description: Documentation for all APIs in the Truyen KTTS project.
+  version: 1.0.0
+servers:
+  - url: http://localhost:3002
+    description: Local server
+paths:
+  /api/login:
+    post:
+      summary: User Login
+      tags:
+        - Authentication
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login successful
+        '401':
+          description: Invalid credentials
+
+  /api/stories-listen:
+    get:
+      summary: Get list of stories from OneDrive
+      tags:
+        - OneDrive
+      responses:
+        '200':
+          description: List of stories
+
+  /api/story-content/{id}:
+    get:
+      summary: Get content of a story by ID
+      tags:
+        - OneDrive
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Story content
+        '444':
+          description: Story not found
+
+  /covers/{id}:
+    get:
+      summary: Get cover image for a story
+      tags:
+        - Assets
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Redirect to cover image URL
+        '404':
+          description: Cover not found
+
+  /api/onedrive/init-download:
+    post:
+      summary: Initialize full download from OneDrive
+      tags:
+        - OneDrive
+      responses:
+        '200':
+          description: Download completed successfully
+        '500':
+          description: Internal server error
+
+  /api/sync/save:
+    post:
+      summary: Save user progress to OneDrive
+      tags:
+        - Sync
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                key:
+                  type: string
+                  description: Username/Key for sync file
+                data:
+                  type: object
+                  description: Progress data to merge
+      responses:
+        '200':
+          description: Save successful
+        '500':
+          description: Save failed
+
+  /api/sync/load/{key}:
+    get:
+      summary: Load user progress from OneDrive
+      tags:
+        - Sync
+      parameters:
+        - name: key
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Progress data loaded
+        '404':
+          description: Data not found
+
+  /api/tts-live:
+    post:
+      summary: Generate TTS audio (Base64)
+      tags:
+        - TTS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                voice:
+                  type: string
+                  default: vi-VN-NamMinhNeural
+                speed:
+                  type: number
+                  default: 1.0
+      responses:
+        '200':
+          description: Audio data generated
+
+  /api/tts-live-stream:
+    post:
+      summary: Generate TTS audio with progress stream
+      tags:
+        - TTS
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                text:
+                  type: string
+                voice:
+                  type: string
+                  default: vi-VN-NamMinhNeural
+                speed:
+                  type: number
+                  default: 1.0
+      responses:
+        '200':
+          description: Streamed audio/progress data
+
+  /api/test-save:
+    post:
+      summary: Test saving a file to OneDrive root
+      tags:
+        - Test
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filename:
+                  type: string
+                content:
+                  type: string
+      responses:
+        '200':
+          description: Test save result
+
+  /api/offline/story/{filename}/chapters:
+    get:
+      summary: Get list of chapters from offline file
+      tags:
+        - Offline Stories
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+          description: Filename in data/data/truyen (e.g. ChuNhaADi.txt)
+      responses:
+        '200':
+          description: List of chapters
+        '404':
+          description: Story not found
+
+  /api/offline/story/{filename}/chapter/{chapterNumber}:
+    get:
+      summary: Get content of a specific chapter
+      tags:
+        - Offline Stories
+      parameters:
+        - name: filename
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: chapterNumber
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Chapter content
+        '404':
+          description: Chapter or Story not found

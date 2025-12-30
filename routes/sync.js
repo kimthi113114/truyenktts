@@ -7,8 +7,113 @@ import onedrive from '../utils/OneDriveStorage.js';
 
 const router = express.Router();
 
+// --- QUEUE SYSTEM FOR SYNC ---
+const SyncQueue = {
+    queue: [],
+    isProcessing: false,
+
+    add(filename, data) {
+        // Add to queue
+        this.queue.push({ filename, data });
+        console.log(`📥 Added to SyncQueue: ${filename} (Queue size: ${this.queue.length})`);
+
+        // Trigger processing if not already running
+        if (!this.isProcessing) {
+            this.process();
+        }
+    },
+
+    async process() {
+        if (this.queue.length === 0) {
+            this.isProcessing = false;
+            return;
+        }
+
+        this.isProcessing = true;
+        const task = this.queue.shift(); // Get first item
+        const { filename, data } = task;
+
+        console.log(`🔄 Processing Sync Task: ${filename}`);
+
+        // RETRY LOGIC (Max 3 attempts)
+        const MAX_RETRIES = 3;
+        for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+            try {
+                await this.performSync(filename, data);
+                console.log(`✅ Sync Task Completed: ${filename}`);
+                break; // Success -> Exit retry loop
+            } catch (err) {
+                console.warn(`⚠️ Sync Attempt ${attempt}/${MAX_RETRIES} failed for ${filename}:`, err.message);
+                if (attempt === MAX_RETRIES) {
+                    console.error(`❌ Sync Task Dropped after ${MAX_RETRIES} attempts: ${filename}`);
+                } else {
+                    // Wait slightly before retry (exponential backoff-ish)
+                    await new Promise(r => setTimeout(r, 1000 * attempt));
+                }
+            }
+        }
+
+        // Process next item
+        this.process();
+    },
+
+    async performSync(filename, newData) {
+        // Check availability inside the async task
+        if (!global.folderId || !global.driveId) {
+            // Maybe try resolving again or just fail?
+            // For now, assume initialized or fail.
+            if (!onedrive.client) throw new Error("OneDrive client not initialized");
+            const ids = await onedrive.getSharedFolderId();
+            if (ids) {
+                global.driveId = ids.driveId;
+                global.folderId = ids.id;
+            } else {
+                throw new Error("OneDrive shared folder not resolved");
+            }
+        }
+
+        let existingData = { data: {} };
+
+        // 1. Try to load existing file first
+        try {
+            const existingFile = await onedrive.getFileByName(filename, global.folderId, global.driveId);
+            if (existingFile && existingFile.url) {
+                const resp = await fetch(existingFile.url);
+                if (resp.ok) {
+                    const json = await resp.json();
+                    if (json && json.data) {
+                        existingData = json;
+                    }
+                }
+            }
+        } catch (readErr) {
+            console.warn("  ℹ️ Failed to read existing file (creating new?):", readErr.message);
+        }
+
+        // 2. MERGE DATA
+        Object.assign(existingData.data, newData);
+
+        const content = JSON.stringify({
+            data: existingData.data,
+            last_updated: new Date().toISOString()
+        }, null, 2);
+
+        // 3. SAVE
+        const result = await onedrive.saveFile(
+            filename,
+            content,
+            global.folderId,
+            global.driveId
+        );
+
+        if (!result.success) {
+            throw new Error(result.error || "Unknown OneDrive error");
+        }
+    }
+};
+
 // Save progress to OneDrive ({username}.json)
-router.post('/sync/save', async (req, res) => {
+router.post('/sync/save', (req, res) => {
     const { key, data } = req.body;
 
     if (!key || !data) {
@@ -19,73 +124,11 @@ router.post('/sync/save', async (req, res) => {
     const safeKey = path.basename(key).replace(/[^a-z0-9_\-]/gi, '_');
     const filename = `${safeKey}.json`;
 
-    // Check if OneDrive is ready (optional but good)
-    if (!global.folderId || !global.driveId) {
-        console.warn("⚠️ OneDrive not ready. Sync might fail if not initialized.");
-    }
+    // ADD TO QUEUE & RETURN IMMEDIATELY
+    SyncQueue.add(filename, data);
 
-    try {
-        let existingData = { data: {} };
-
-        // 1. Try to load existing file first
-        if (global.folderId && global.driveId) {
-            try {
-                console.log(`📥 Reading existing ${filename} for merge...`);
-                const existingFile = await onedrive.getFileByName(filename, global.folderId, global.driveId);
-                if (existingFile && existingFile.url) {
-                    const resp = await fetch(existingFile.url);
-                    if (resp.ok) {
-                        const json = await resp.json();
-                        if (json && json.data) {
-                            existingData = json;
-                            console.log(`✅ Loaded existing data with ${Object.keys(existingData.data).length} stories.`);
-                        }
-                    }
-                } else {
-                    console.log(`ℹ️ File ${filename} does not exist yet. Creating new.`);
-                }
-            } catch (readErr) {
-                console.warn("⚠️ Failed to read existing file (ignoring):", readErr.message);
-            }
-        }
-
-        // 2. MERGE DATA (Partial Update)
-        // data from client is expected to be { "storyId": { ... } }
-        console.log("🔄 Merging new data:", Object.keys(data));
-
-        // Use deep merge or spread at story level
-        // existingData.data = { ...existingData.data, ...data }; 
-        // Iterate keys to ensure we don't wipe other props if any (?) 
-        // Actually, client sends { "storyId": { ... } } so simple spread is fine for story-level keys.
-        // But if we want to support deep merge within a story (unlikely needed for this simple case), we'd need lodash.merge.
-        // For now, story-level replacement is desired behavior (update whole story progress).
-
-        Object.assign(existingData.data, data);
-
-        const content = JSON.stringify({
-            data: existingData.data,
-            last_updated: new Date().toISOString()
-        }, null, 2);
-
-        // 3. Save to Root of Shared Folder
-        console.log(`📤 Saving merged ${filename} to OneDrive...`);
-        const result = await onedrive.saveFile(
-            filename,
-            content,
-            global.folderId,
-            global.driveId
-        );
-
-        if (result.success) {
-            console.log("✅ Save successful!");
-            res.json({ success: true, message: "Saved to OneDrive successfully" });
-        } else {
-            throw new Error(result.error || "Unknown OneDrive error");
-        }
-    } catch (err) {
-        console.error("Error saving progress to OneDrive:", err);
-        res.status(500).json({ error: "Failed to save progress to Cloud" });
-    }
+    // Non-blocking response
+    res.json({ success: true, message: "Sync request queued" });
 });
 
 // Load progress from OneDrive
@@ -100,19 +143,8 @@ router.get('/sync/load/:key', async (req, res) => {
     const filename = `${safeKey}.json`;
 
     try {
-        // Check if OneDrive is ready
-        // if (!global.folderId || !global.driveId) {
-        //     console.warn("⚠️ Using Root Drive for load (Shared folder not ready).");
-        // }
-
-        const folderId = global.folderId; // Undefined is fine (handled as root in helper?)
+        const folderId = global.folderId;
         const driveId = global.driveId;
-
-        // Note: We need to ensure getFileByName handles missing IDs by checking root
-        // OneDriveStorage.getFileByName implementation:
-        // if (!this.client) return null;
-        // listChildren(parentId, driveId) -> if !driveId, defaults to /me/drive/root/children
-        // So it SHOULD work!
 
         const file = await onedrive.getFileByName(filename, folderId, driveId);
 

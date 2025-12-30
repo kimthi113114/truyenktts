@@ -8,6 +8,65 @@
     <meta name="apple-mobile-web-app-title" content="Truyện K-TTS">
     <link rel="stylesheet" href="/css/style.css">
     <link rel="icon" href="/icon/favico.ico" type="image/x-icon">
+    <style>
+        /* [MODIFIED] Log Modal Styles */
+        #logModal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 2000;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #logContent {
+            background: #fff;
+            width: 80%;
+            max-width: 600px;
+            height: 70%;
+            border-radius: 12px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+            font-family: monospace;
+        }
+
+        #logList {
+            flex: 1;
+            overflow-y: auto;
+            background: #f5f5f5;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid #ddd;
+            margin-bottom: 10px;
+            font-size: 0.9rem;
+        }
+
+        .log-item {
+            margin-bottom: 4px;
+            border-bottom: 1px solid #eee;
+            padding-bottom: 2px;
+        }
+
+        .log-info {
+            color: #333;
+        }
+
+        .log-error {
+            color: #d9534f;
+            font-weight: bold;
+        }
+
+        .log-success {
+            color: #5cb85c;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body>
@@ -15,11 +74,28 @@
         <div style="display: flex; align-items: center; gap: 10px;">
             <img src="/icon/favico.png" alt="Logo" style="height: 40px; width: auto;">
             <h2 style="margin: 0;">Truyện K-TTS <span
-                    style="font-size: 0.8rem; color: #888; font-weight: normal;">v2.0.7</span></h2>
+                    style="font-size: 0.8rem; color: #888; font-weight: normal;">v2.8.1</span></h2>
         </div>
         <div style="display: flex; align-items: center; gap: 1rem;">
             <span id="welcome-msg" style="font-size: 0.9rem; color: #666;"></span>
             <button class="logout-btn" onclick="logout()">Đăng xuất</button>
+        </div>
+    </div>
+
+    <!-- Log Modal -->
+    <div id="logModal">
+        <div id="logContent">
+            <h3 style="margin-top: 0; color: #333; display: flex; justify-content: space-between; align-items: center;">
+                <span>🔄 Sync Progress</span>
+                <span id="syncStatusBadge"
+                    style="font-size: 0.8rem; background: #eee; padding: 4px 8px; border-radius: 12px;">Connecting...</span>
+            </h3>
+            <div id="logList"></div>
+            <button onclick="closeLogModal()" id="closeLogBtn" disabled style="
+                padding: 10px; background: #ddd; color: #666; 
+                border: none; border-radius: 5px; cursor: not-allowed; font-weight: bold;">
+                Close (Wait for completion)
+            </button>
         </div>
     </div>
 
@@ -41,6 +117,23 @@
                 transition: all 0.2s ease;">
                 <span id="viewIcon" style="font-size: 1.1rem;">☰</span>
                 <span id="viewText">Danh sách</span>
+            </button>
+            <button id="syncOneDriveBtn" onclick="initOneDrive()" style="
+                background-color: #0078d4; 
+                margin-left: 10px;
+                border: none; 
+                padding: 0.6rem 1.2rem; 
+                border-radius: 20px; 
+                display: flex; 
+                align-items: center; 
+                gap: 8px; 
+                cursor: pointer; 
+                font-weight: 500; 
+                color: white;
+                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+                transition: all 0.2s ease;">
+                <span>☁️</span>
+                <span>Sync OneDrive</span>
             </button>
         </div>
         <div class="story-grid" id="storyGrid">
@@ -74,6 +167,98 @@
         function logout() {
             localStorage.removeItem('user');
             window.location.href = '/login';
+        }
+
+        async function initOneDrive() {
+            const btn = document.getElementById('syncOneDriveBtn');
+
+            if (!confirm("Bạn có chắc muốn đồng bộ dữ liệu từ OneDrive? Quá trình này có thể mất vài phút.")) return;
+
+            // UI Elements
+            const modal = document.getElementById('logModal');
+            const logList = document.getElementById('logList');
+            const closeBtn = document.getElementById('closeLogBtn');
+            const badge = document.getElementById('syncStatusBadge');
+
+            // Reset UI
+            modal.style.display = 'flex';
+            logList.innerHTML = '';
+            closeBtn.disabled = true;
+            closeBtn.style.background = '#ddd';
+            closeBtn.style.cursor = 'not-allowed';
+            closeBtn.textContent = 'Wait for completion...';
+            badge.textContent = 'Connecting...';
+            badge.style.background = '#ffc107';
+            badge.style.color = '#000';
+
+            // Helper to add logs
+            const addLog = (msg, type = 'info') => {
+                const div = document.createElement('div');
+                div.className = `log-item log-${type}`;
+                div.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                logList.appendChild(div);
+                logList.scrollTop = logList.scrollHeight;
+            };
+
+            addLog("Đang kết nối tới máy chủ...", "info");
+
+            // Use EventSource for Real-time Logs
+            const evtSource = new EventSource("/api/onedrive/init-download");
+
+            evtSource.onmessage = (e) => {
+                try {
+                    const data = JSON.parse(e.data);
+
+                    if (data.type === 'log') {
+                        addLog(data.message, 'info');
+                    } else if (data.type === 'file') {
+                        // File progress
+                        if (data.status === 'downloading') {
+                            addLog(`⬇️ ${data.name}`, 'info');
+                        }
+                    } else if (data.type === 'done') {
+                        // Completion
+                        addLog(data.message, 'success');
+                        badge.textContent = 'Hoàn tất';
+                        badge.style.background = '#5cb85c';
+                        badge.style.color = '#fff';
+
+                        closeBtn.disabled = false;
+                        closeBtn.style.background = '#5cb85c';
+                        closeBtn.style.color = '#fff';
+                        closeBtn.style.cursor = 'pointer';
+                        closeBtn.textContent = 'Xong - Tải lại trang';
+                        closeBtn.onclick = () => window.location.reload();
+
+                        evtSource.close();
+                    } else if (data.type === 'error') {
+                        // Error
+                        addLog(data.message, 'error');
+                        badge.textContent = 'Lỗi';
+                        badge.style.background = '#d9534f';
+                        badge.style.color = '#fff';
+
+                        closeBtn.disabled = false;
+                        closeBtn.style.background = '#d9534f';
+                        closeBtn.style.cursor = 'pointer';
+                        closeBtn.style.color = '#fff';
+                        closeBtn.textContent = 'Đóng (Thất bại)';
+                        closeBtn.onclick = () => { modal.style.display = 'none'; };
+
+                        evtSource.close();
+                    }
+                } catch (parseErr) {
+                    console.error("SSE Parse Error", parseErr);
+                }
+            };
+
+            evtSource.onerror = (e) => {
+                console.error("EventSource failed:", e);
+                addLog("Mất kết nối tới máy chủ.", "error");
+                closeBtn.disabled = false;
+                closeBtn.onclick = () => { modal.style.display = 'none'; };
+                evtSource.close();
+            };
         }
 
         // Fetch Stories
@@ -175,8 +360,8 @@
                         <p><strong>ID:</strong> ${story.id}</p>
                         ${historyText ? `<div style="margin: 1rem 0; padding: 0.5rem; background: #f3f4f6; border-radius: 4px;">${historyText}</div>` : ''}
                         <div style="margin-top: 2rem;">
-                            <a href="/audio/${story.id}/${progress?.chapterId}" class="button" style="text-decoration: none; background: var(--primary-color); color: white; padding: 0.8rem 1.5rem; border-radius: 4px; display:inline-block;">🎧 Nghe Truyện</a>
-                            <a href="/listen/${story.id}/${progress?.chapterId}" class="button" style="text-decoration: none; background: var(--primary-color); color: white; padding: 0.8rem 1.5rem; border-radius: 4px; display:inline-block;">📖 Đọc Truyện</a>
+                            <a href="/audio/${story.id}/${progress?.chapterId || 1}" class="button" style="text-decoration: none; background: var(--primary-color); color: white; padding: 0.8rem 1.5rem; border-radius: 4px; display:inline-block;">🎧 Nghe Truyện</a>
+                            <a href="/listen/${story.id}/${progress?.chapterId || 1}" class="button" style="text-decoration: none; background: var(--primary-color); color: white; padding: 0.8rem 1.5rem; border-radius: 4px; display:inline-block;">📖 Đọc Truyện</a>
                         </div>
                     </div>
                 </div>

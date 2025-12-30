@@ -34,6 +34,11 @@ document.addEventListener('DOMContentLoaded', () => {
     let waveformData = [];
     const BAR_COUNT = 60;
     let lastDrawPercent = -1; // Biến tối ưu vẽ waveform
+    let cachedGradient = null; // Cache gradient để không tạo mới mỗi frame
+
+    // Performance: Throttle timeupdate
+    let lastTimeUpdate = 0;
+    const TIME_UPDATE_THROTTLE = 250; // ms - chỉ update 4 lần/giây thay vì 15-60 lần
 
     // ==========================================================
     // 2. LẤY CÁC ELEMENT TỪ HTML 
@@ -146,9 +151,11 @@ document.addEventListener('DOMContentLoaded', () => {
                                 }
                             }
                         } catch (e) { console.error(e); }
-
+                        els.trackTitle.textContent = `Chương ${urlChapterId}: ${currentChapters[urlChapterId].title}`;
+                        els.chapterSelect.value = urlChapterId;
+                        currentChapterId = parseInt(urlChapterId);
                         // Pass autoPlay = false for initial load, but use saved startTime
-                        await playChapter(parseInt(urlChapterId), startTime, null, false);
+                        // await playChapter(parseInt(urlChapterId), startTime, null, false);
                     } else {
                         // Check if we have saved progress for this story to resume
                         await loadProgressCheck(urlStoryId);
@@ -177,7 +184,9 @@ document.addEventListener('DOMContentLoaded', () => {
         els.chapterSelect.addEventListener('change', (e) => {
             if (e.target.value) {
                 savedStartTime = 0;
-                playChapter(parseInt(e.target.value));
+                if (isPlaying) {
+                    playChapter(parseInt(e.target.value));
+                }
             }
         });
         els.playBtn.addEventListener('click', togglePlay);
@@ -193,7 +202,9 @@ document.addEventListener('DOMContentLoaded', () => {
                         currentPercent = audioPlayer.currentTime / audioPlayer.duration;
                     }
                     const wasPlaying = isPlaying;
-                    playChapter(currentChapterId, 0, currentPercent);
+                    if (isPlaying) {
+                        playChapter(currentChapterId, 0, currentPercent);
+                    }
                     nextChapterData = null;
                     nextChapterId = null;
                 }
@@ -340,10 +351,20 @@ document.addEventListener('DOMContentLoaded', () => {
         stopPlayback();
 
         try {
-            const resp = await fetch(`/api/story-content/${storyId}`);
-            if (!resp.ok) throw new Error("Lỗi tải nội dung");
+            // [MODIFIED] Use Offline API for chapter list
+            const resp = await fetch(`/api/offline/story/${storyId}/chapters`);
+            if (!resp.ok) throw new Error("Lỗi tải danh sách chương");
             const data = await resp.json();
-            currentChapters = extractChapters(data.content);
+
+            currentChapters = {};
+            if (data.chapters && Array.isArray(data.chapters)) {
+                data.chapters.forEach(c => {
+                    currentChapters[c.chapter] = {
+                        title: c.title,
+                        content: null // Load on demand
+                    };
+                });
+            }
 
             const sortedNums = Object.keys(currentChapters).map(Number).sort((a, b) => a - b);
             sortedNums.forEach(num => {
@@ -355,29 +376,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
             els.chapterSelect.disabled = false;
             if (els.storyTitle) els.storyTitle.textContent = els.storySelect.options[els.storySelect.selectedIndex].text;
-            showToast('Đã tải truyện', 'success');
+            showToast('Đã tải danh sách chương', 'success');
         } catch (err) {
             showToast('Lỗi tải truyện: ' + err.message, 'error');
         } finally {
             showLoading(false);
         }
     }
-    function extractChapters(text) {
-        const chapters = {};
-        const standardizedText = '\n' + (text || '').trim() + '\n';
-        const chapterRegex = /\n===\s*Chương\s*(\d+)(?::\s*(.*?))?\s*===\s*([\s\S]*?)(?=\n===\s*Chương|$)/gi;
-        let m;
-        while ((m = chapterRegex.exec(standardizedText)) !== null) {
-            const num = parseInt(m[1], 10);
-            const title = (m[2] || '').trim();
-            const content = (m[3] || '').trim();
-            if (!Number.isNaN(num)) chapters[num] = { title, content };
-        }
-        return chapters;
-    }
 
     async function playChapter(chapterId, startTime = 0, startPercent = null, autoPlay = true) {
         if (!currentChapters[chapterId]) return;
+
+        // [MODIFIED] Fetch content on demand
+        if (!currentChapters[chapterId].content) {
+            showToast(`Đang tải nội dung chương ${chapterId}...`, 'info');
+            try {
+                const resp = await fetch(`/api/offline/story/${currentStoryId}/chapter/${chapterId}`);
+                if (resp.ok) {
+                    const data = await resp.json();
+                    currentChapters[chapterId].content = data.content;
+                    currentChapters[chapterId].title = data.title || currentChapters[chapterId].title;
+                } else {
+                    throw new Error("Load failed");
+                }
+            } catch (e) {
+                showToast("Lỗi tải nội dung chương", "error");
+                return;
+            }
+        }
 
         currentChapterId = chapterId;
         updateURL(currentStoryId, currentChapterId); // Update URL
@@ -573,6 +599,7 @@ document.addEventListener('DOMContentLoaded', () => {
             audioPlayer.pause();
             updatePlayButton();
         } else {
+            debugger;
             // Kiểm tra trạng thái lỗi/rỗng trước khi play
             if (audioPlayer.error || !audioPlayer.src || audioPlayer.networkState === 3) {
                 console.log("Source lỗi/rỗng -> Gọi Recover");
@@ -614,6 +641,11 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function updateProgress() {
+        const now = performance.now();
+        // Throttle: Bỏ qua nếu gọi quá nhanh (trừ khi seek thủ công)
+        if (now - lastTimeUpdate < TIME_UPDATE_THROTTLE) return;
+        lastTimeUpdate = now;
+
         if (audioPlayer.duration && !isNaN(audioPlayer.duration)) {
             const currentTime = audioPlayer.currentTime;
             const duration = audioPlayer.duration;
@@ -623,12 +655,31 @@ document.addEventListener('DOMContentLoaded', () => {
             if (els.currentTime) els.currentTime.textContent = formatTime(currentTime);
 
             if (currentSubtitles.length > 0) {
-                const index = currentSubtitles.findIndex(sub =>
-                    currentTime >= sub.start && currentTime < sub.end
-                );
+                // Binary search thay vì findIndex O(n)
+                const index = findSubtitleIndex(currentTime);
                 if (index !== -1) highlightSubtitle(index);
             }
         }
+    }
+
+    // Binary search để tìm subtitle - O(log n) thay vì O(n)
+    function findSubtitleIndex(time) {
+        let left = 0;
+        let right = currentSubtitles.length - 1;
+
+        while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            const sub = currentSubtitles[mid];
+
+            if (time >= sub.start && time < sub.end) {
+                return mid;
+            } else if (time < sub.start) {
+                right = mid - 1;
+            } else {
+                left = mid + 1;
+            }
+        }
+        return -1;
     }
 
     function stopPlayback() {
@@ -650,6 +701,22 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             nextChapterId = nextId;
+
+            // [MODIFIED] Fetch content on demand for preload
+            if (!currentChapters[nextId].content) {
+                try {
+                    const resp = await fetch(`/api/offline/story/${currentStoryId}/chapter/${nextId}`);
+                    if (resp.ok) {
+                        const data = await resp.json();
+                        currentChapters[nextId].content = data.content;
+                    }
+                } catch (e) {
+                    console.warn("Preload fetch content failed", e);
+                }
+            }
+            // If still no content, skip preload logic
+            if (!currentChapters[nextId].content) return;
+
             const fullText = `Chương ${nextId}. ${currentChapters[nextId].title}. \n ${currentChapters[nextId].content}`;
             try {
                 // isPreload = true
@@ -1060,37 +1127,71 @@ document.addEventListener('DOMContentLoaded', () => {
         els.waveformCanvas.width = rect.width * dpr;
         els.waveformCanvas.height = rect.height * dpr;
         els.waveformCanvas.getContext('2d').scale(dpr, dpr);
+
+        // Tạo lại gradient khi resize
+        const width = rect.width;
+        const ctx = els.waveformCanvas.getContext('2d');
+        cachedGradient = ctx.createLinearGradient(0, 0, width, 0);
+        cachedGradient.addColorStop(0, '#d946ef');
+        cachedGradient.addColorStop(1, '#3b82f6');
+
+        lastDrawPercent = -1; // Force redraw
         drawWaveform(audioPlayer.duration ? audioPlayer.currentTime / audioPlayer.duration : 0);
     }
     function drawWaveform(progress) {
         if (!els.waveformCanvas) return;
-        if (Math.abs(progress - lastDrawPercent) < 0.005) return;
+        if (Math.abs(progress - lastDrawPercent) < 0.008) return; // Tăng threshold
         lastDrawPercent = progress;
 
         const ctx = els.waveformCanvas.getContext('2d');
-        const width = els.waveformCanvas.width / (window.devicePixelRatio || 1);
-        const height = els.waveformCanvas.height / (window.devicePixelRatio || 1);
-        ctx.clearRect(0, 0, width, height);
+        const dpr = window.devicePixelRatio || 1;
+        const width = els.waveformCanvas.width / dpr;
+        const height = els.waveformCanvas.height / dpr;
+
+        ctx.clearRect(0, 0, width * dpr, height * dpr);
 
         const itemWidth = width / waveformData.length;
-        const gradient = ctx.createLinearGradient(0, 0, width, 0);
-        gradient.addColorStop(0, '#d946ef'); gradient.addColorStop(1, '#3b82f6');
+        const progressX = progress * width;
 
-        waveformData.forEach((hPercent, i) => {
-            const x = i * itemWidth + itemWidth * 0.2;
-            const h = (hPercent / 100) * (height * 0.8);
-            const y = (height - h) / 2;
-            const isPlayed = x < progress * width;
+        // Set properties once outside loop
+        ctx.lineCap = 'round';
+        ctx.lineWidth = itemWidth * 0.6;
+        // QUAN TRỌNG: Tắt shadow - rất tốn CPU!
+        ctx.shadowBlur = 0;
 
-            ctx.lineCap = 'round';
-            ctx.lineWidth = itemWidth * 0.6;
-            ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x, y + h);
+        const heightMultiplier = height * 0.8;
+        const halfHeight = height / 2;
+        const xOffset = itemWidth * 0.2;
 
-            ctx.strokeStyle = isPlayed ? gradient : '#334155';
-            ctx.shadowBlur = isPlayed ? 10 : 0;
-            ctx.shadowColor = "rgba(139, 92, 246, 0.4)";
+        // Vẽ phần chưa play trước (màu xám)
+        ctx.strokeStyle = '#334155';
+        ctx.beginPath();
+        for (let i = 0; i < waveformData.length; i++) {
+            const x = i * itemWidth + xOffset;
+            if (x >= progressX) {
+                const h = (waveformData[i] / 100) * heightMultiplier;
+                const y = halfHeight - h / 2;
+                ctx.moveTo(x, y);
+                ctx.lineTo(x, y + h);
+            }
+        }
+        ctx.stroke();
+
+        // Vẽ phần đã play (gradient) - chỉ khi có gradient
+        if (cachedGradient && progressX > 0) {
+            ctx.strokeStyle = cachedGradient;
+            ctx.beginPath();
+            for (let i = 0; i < waveformData.length; i++) {
+                const x = i * itemWidth + xOffset;
+                if (x < progressX) {
+                    const h = (waveformData[i] / 100) * heightMultiplier;
+                    const y = halfHeight - h / 2;
+                    ctx.moveTo(x, y);
+                    ctx.lineTo(x, y + h);
+                }
+            }
             ctx.stroke();
-        });
+        }
     }
 
     init();

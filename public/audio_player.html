@@ -683,6 +683,359 @@
             overflow: hidden;
             transition: opacity 0.15s ease-out;
         }
+
+        /* ============================================
+           LANDSCAPE MODE - Chế độ nằm ngang
+           ============================================ */
+        @media screen and (orientation: landscape) {
+            body {
+                overflow: hidden;
+            }
+
+            .container {
+                flex-direction: row;
+                max-width: 95%;
+                padding: 10px 20px;
+                gap: 20px;
+                align-items: stretch;
+            }
+
+            /* Ẩn header để tiết kiệm không gian */
+            .header {
+                display: none;
+            }
+
+            /* Nút Back và Listen - điều chỉnh vị trí */
+            .btn-back {
+                top: 10px;
+                left: 10px;
+            }
+
+            .btn-listen {
+                top: 10px;
+                right: 10px;
+            }
+
+            /* --- VISUAL AREA (Bên trái - mở rộng hết không gian còn lại) --- */
+            .visual-area {
+                flex: 1;
+                width: 90%;
+                min-width: 200px;
+                padding: 10px;
+                gap: 8px;
+                justify-content: center;
+            }
+
+            .album-art {
+                width: 100px;
+                height: 100px;
+                border-radius: 16px;
+            }
+
+            .album-art span img {
+                width: 65px !important;
+                height: 65px !important;
+                margin-top: 8px !important;
+            }
+
+            .track-info {
+                padding: 0 5px;
+            }
+
+            .track-title {
+                font-size: 0.9rem;
+            }
+
+            .track-artist {
+                font-size: 0.75rem;
+            }
+
+            /* Subtitle container trong landscape - mở rộng tối đa */
+            .subtitle-container {
+                flex: 1;
+                width: 100%;
+                height: auto !important;
+                min-height: calc(100dvh - 100px) !important;
+                max-height: none;
+            }
+
+            .sub-line {
+                font-size: 1.1rem;
+                line-height: 1.5;
+            }
+
+            /* --- CONTROLS AREA (Bên phải - thu gọn) --- */
+            .controls-area {
+                flex: 0 0 auto;
+                width: 280px;
+                max-width: 320px;
+                border-radius: 16px;
+                padding: 10px 12px;
+                gap: 6px;
+                display: flex;
+                flex-direction: column;
+                justify-content: center;
+                max-height: calc(100dvh - 20px);
+                overflow-y: auto;
+            }
+
+            /* Selection group - gọn hơn */
+            .selection-group {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 4px;
+            }
+
+            #storySelect {
+                flex: 1 1 100%;
+            }
+
+            .selection-group select {
+                flex: 1;
+                min-width: 70px;
+                padding: 5px 8px;
+                font-size: 0.7rem;
+            }
+
+            /* Progress và time */
+            .progress-container {
+                height: 28px;
+                margin-top: 0;
+            }
+
+            .time-info {
+                font-size: 0.6rem;
+                margin-top: -2px;
+            }
+
+            /* Main controls - thu nhỏ hơn nữa */
+            .main-controls {
+                padding: 0;
+                margin: 2px 0;
+            }
+
+            .btn-play {
+                width: 40px;
+                height: 40px;
+            }
+
+            .btn-play svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .btn-skip svg {
+                width: 20px;
+                height: 20px;
+            }
+
+            /* Settings row - gọn hơn */
+            .settings-row {
+                padding-top: 4px;
+                gap: 6px;
+                flex-wrap: wrap;
+            }
+
+            .settings-row select {
+                font-size: 0.65rem;
+            }
+
+            .btn-toggle-lyrics {
+                width: 28px;
+                height: 28px;
+            }
+
+            .btn-toggle-lyrics svg {
+                width: 14px;
+                height: 14px;
+            }
+
+            #sleepTimerBtn {
+                font-size: 0.65rem !important;
+            }
+
+            #sleepTimerBtn svg {
+                width: 12px !important;
+                height: 12px !important;
+            }
+
+            /* Collapse button - điều chỉnh vị trí trong landscape */
+            .btn-collapse-controls {
+                display: flex;
+                position: absolute;
+                top: 50%;
+                left: -18px;
+                transform: translateY(-50%) rotate(-90deg);
+                width: 36px;
+                height: 24px;
+                border-radius: 12px 12px 0 0;
+            }
+
+            /* Visual expanded state trong landscape */
+            .visual-area.expanded {
+                flex: 1 1 60%;
+            }
+
+            .visual-area.expanded .album-art {
+                width: 120px;
+                height: 120px;
+            }
+
+            .controls-area.collapsed {
+                width: 280px;
+                padding: 10px 12px;
+            }
+
+            /* Hiển thị lại các phần tử trong landscape */
+            .controls-area.collapsed .selection-group,
+            .controls-area.collapsed .progress-container,
+            .controls-area.collapsed .time-info,
+            .controls-area.collapsed .settings-row {
+                display: flex;
+                opacity: 1;
+                visibility: visible;
+                height: auto;
+            }
+
+
+            .controls-area.collapsed .progress-container {
+                display: block;
+            }
+        }
+
+        /* Landscape cho màn hình nhỏ (điện thoại) */
+        @media screen and (orientation: landscape) and (max-height: 500px) {
+            .container {
+                padding: 8px 15px;
+                gap: 15px;
+            }
+
+            .visual-area {
+                flex: 1;
+                width: 100%;
+                min-width: 150px;
+            }
+
+            .album-art {
+                width: 80px;
+                height: 80px;
+                border-radius: 15px;
+            }
+
+            .album-art span img {
+                width: 50px !important;
+                height: 50px !important;
+                margin-top: 5px !important;
+            }
+
+            .track-title {
+                font-size: 0.85rem;
+            }
+
+            .subtitle-container {
+                height: calc(100dvh - 120px) !important;
+                font-size: 0.9rem;
+            }
+
+            .sub-line {
+                font-size: 0.95rem;
+                margin-bottom: 10px;
+            }
+
+            .controls-area {
+                padding: 8px 12px;
+                gap: 5px;
+            }
+
+            .selection-group select {
+                padding: 5px 8px;
+                font-size: 0.7rem;
+            }
+
+            .progress-container {
+                height: 30px;
+            }
+
+            .btn-play {
+                width: 42px;
+                height: 42px;
+            }
+
+            .btn-play svg {
+                width: 18px;
+                height: 18px;
+            }
+
+            .btn-skip svg {
+                width: 20px;
+                height: 20px;
+            }
+
+            .settings-row {
+                padding-top: 4px;
+            }
+
+            .btn-toggle-lyrics {
+                width: 30px;
+                height: 30px;
+            }
+
+            /* Ẩn bớt các phần tử không cần thiết */
+            .settings-row>div span:first-child {
+                display: none;
+                /* Ẩn label "Giọng đọc:" */
+            }
+        }
+
+        /* Landscape cho tablet/màn hình lớn */
+        @media screen and (orientation: landscape) and (min-height: 500px) and (min-width: 900px) {
+            .container {
+                padding: 15px 30px;
+                gap: 30px;
+            }
+
+            .visual-area {
+                flex: 1;
+                width: 100%;
+            }
+
+            .album-art {
+                width: 180px;
+                height: 180px;
+            }
+
+            .album-art span img {
+                width: 120px !important;
+                height: 120px !important;
+            }
+
+            .track-title {
+                font-size: 1.2rem;
+            }
+
+            .subtitle-container {
+                height: calc(100dvh - 250px) !important;
+            }
+
+            .sub-line {
+                font-size: 1.2rem;
+            }
+
+            .btn-play {
+                width: 60px;
+                height: 60px;
+            }
+
+            .btn-play svg {
+                width: 26px;
+                height: 26px;
+            }
+
+            .btn-skip svg {
+                width: 30px;
+                height: 30px;
+            }
+        }
     </style>
 </head>
 

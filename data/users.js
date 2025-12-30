@@ -1,5 +1,3 @@
-
-const users = [
+export default [
     { username: "kimthi", password: "kimthi" }
 ];
-export default users;
