@@ -48,28 +48,11 @@ onedrive.initialize().then(async success => {
 // -----------------------------------------------------------------------------
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ limit: "50mb", extended: true }));
-app.use(express.static(path.join(__dirname, "public")));
-app.use("/audio", express.static(path.join(__dirname, "output"))); // Serve audio files
+app.use(express.static(path.join(__dirname, "../client/dist")));
+
+app.use("/js", express.static(path.join(__dirname, "../public", "js")));
+// app.use("/audio", express.static(path.join(__dirname, "output"))); // Serve audio files
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
-
-// -----------------------------------------------------------------------------
-// [ROUTES] View Routes (HTML Pages)
-// -----------------------------------------------------------------------------
-app.get("/", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "index.html"));
-});
-
-app.get("/login", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "login.html"));
-});
-
-app.get("/listen/:storyId?/:chapterId?", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "listen.html"));
-});
-
-app.get("/audio/:storyId?/:chapterId?", (req, res) => {
-    res.sendFile(path.join(__dirname, "public", "audio_player.html"));
-});
 
 // -----------------------------------------------------------------------------
 // [ROUTES] API Routes - Features
@@ -84,11 +67,16 @@ app.use("/api", offlineStoriesRoute);
 // -----------------------------------------------------------------------------
 app.post("/api/login", (req, res) => {
     const { username, password } = req.body;
+
+    // Find user in local users list
     const user = users.find(u => u.username === username && u.password === password);
+
     if (user) {
-        res.json({ success: true, user: { username: user.username } });
+        // Return without password for security
+        const { password, ...userWithoutPassword } = user;
+        res.json({ success: true, user: userWithoutPassword });
     } else {
-        res.status(401).json({ success: false, message: "Invalid credentials" });
+        res.status(401).json({ success: false, message: "Sai tên đăng nhập hoặc mật khẩu" });
     }
 });
 
@@ -191,6 +179,17 @@ app.post("/api/test-save", async (req, res) => {
     } catch (e) {
         res.status(500).json({ error: e.message });
     }
+});
+
+// [SPA ROUTING] Serve React App for all non-API routes
+app.get("*", (req, res) => {
+    if (req.path.startsWith("/api") || req.path.startsWith("/covers")) {
+        return res.status(404).json({ error: "Not found" });
+    }
+    // if (req.path.startsWith("/audio")) {
+    //     res.send(fs.readFileSync(path.join(__dirname, "../public", "audio_player.html"), "utf8"));
+    // }
+    res.send(fs.readFileSync(path.join(__dirname, "../client/dist", "index.html"), "utf8"));
 });
 
 // -----------------------------------------------------------------------------

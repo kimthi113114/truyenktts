@@ -1,0 +1,379 @@
+/* Listen.css */
+@import url('https://fonts.googleapis.com/css2?family=Merriweather:ital,wght@0,300;0,400;0,700;1,400&family=Roboto+Slab:wght@300;400;700&family=Inter:wght@300;400;500;600&family=Outfit:wght@300;400;500;600&display=swap');
+
+:root {
+    --listen-bg: #fdfbf7;
+    /* Warm paper-like background */
+    --listen-text: #2d3748;
+    --listen-accent: #8b5cf6;
+    --listen-accent-glow: rgba(139, 92, 246, 0.4);
+    --listen-highlight: #fff7ed;
+    /* Light orange/yellow for playing */
+    --listen-font-serif: 'Merriweather', 'Roboto Slab', serif;
+    --listen-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+}
+
+.listen-layout {
+    min-height: 100vh;
+    background-color: var(--listen-bg);
+    color: var(--listen-text);
+    transition: background-color 0.3s, color 0.3s;
+    overflow-x: hidden;
+}
+
+/* Header */
+.listen-header {
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    padding: 12px 24px;
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    transition: background 0.3s, border-color 0.3s;
+}
+
+/* Dark mode header */
+.dark-mode .listen-header {
+    background: rgba(15, 23, 42, 0.95) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Body level dark mode for global components */
+body.dark-mode {
+    background-color: #0f172a;
+}
+
+/* Drawer wrapper and mask */
+body.dark-mode .ant-drawer-mask {
+    background: rgba(0, 0, 0, 0.7) !important;
+}
+
+body.dark-mode .ant-drawer-content-wrapper .ant-drawer-content {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .ant-drawer-content {
+    background: #1e293b !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .ant-drawer-header {
+    background: #1e293b !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-mode .ant-drawer-title {
+    color: #f1f5f9 !important;
+}
+
+body.dark-mode .ant-drawer-close {
+    color: #94a3b8 !important;
+}
+
+body.dark-mode .ant-drawer-close:hover {
+    color: #fff !important;
+}
+
+body.dark-mode .ant-drawer-body {
+    color: #e2e8f0 !important;
+    background: #1e293b !important;
+}
+
+/* Chapter list items in drawer */
+body.dark-mode .ant-drawer-body>div>div {
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+body.dark-mode .ant-drawer-body>div>div:hover {
+    background: rgba(255, 255, 255, 0.05) !important;
+}
+
+/* Select dropdown in body */
+body.dark-mode .ant-select-dropdown {
+    background: #1e293b !important;
+}
+
+body.dark-mode .ant-select-item {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .ant-select-item-option-active,
+body.dark-mode .ant-select-item-option-selected {
+    background: rgba(139, 92, 246, 0.2) !important;
+}
+
+/* Typography in dark mode */
+body.dark-mode .ant-typography {
+    color: #e2e8f0 !important;
+}
+
+/* Buttons in dark mode - global */
+body.dark-mode .ant-btn-default {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .ant-btn-default:hover {
+    background: rgba(255, 255, 255, 0.15) !important;
+    border-color: rgba(255, 255, 255, 0.3) !important;
+    color: #fff !important;
+}
+
+body.dark-mode .ant-btn-text {
+    color: #e2e8f0 !important;
+}
+
+body.dark-mode .ant-btn-text:hover {
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #fff !important;
+}
+
+/* Reading Content */
+.reading-container {
+    max-width: 100%;
+    margin: 0 auto;
+    padding: 20px 16px 180px;
+    /* Bottom padding for fixed controls */
+}
+
+.chapter-title {
+    font-weight: 800;
+    text-align: center;
+    margin-bottom: 48px;
+    color: #1a202c;
+    letter-spacing: -0.02em;
+}
+
+.reading-text {
+    font-size: 1.25rem;
+    /* 20px */
+    line-height: 1.9;
+    color: #2d3748;
+}
+
+.sentence-wrapper {
+    margin-bottom: 20px;
+    padding: 8px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    border-left: 4px solid transparent;
+}
+
+.sentence-wrapper:hover {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+
+.sentence-wrapper.active {
+    background-color: var(--listen-highlight);
+    /* Light highlight */
+    color: #000;
+    border-left-color: var(--listen-accent);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+    transform: translateX(4px);
+}
+
+/* Controls Bar - Beautiful Glassmorphism Design */
+.controls-bar {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(0);
+    width: 92%;
+    max-width: 500px;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+    box-shadow:
+        0 20px 40px -10px rgba(0, 0, 0, 0.15),
+        0 0 0 1px rgba(255, 255, 255, 0.8) inset;
+    border-radius: 24px;
+    padding: 16px 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    z-index: 1000;
+    transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), opacity 0.3s ease;
+    will-change: transform, opacity;
+}
+
+.controls-bar.hidden {
+    transform: translateX(-50%) translateY(120%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.controls-main-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.controls-center {
+    display: flex;
+    align-items: center;
+    gap: 24px;
+}
+
+.play-button-wrapper {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--listen-accent), #7c3aed);
+    box-shadow: 0 8px 24px var(--listen-accent-glow);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease;
+}
+
+.play-button-wrapper:hover {
+    transform: scale(1.05);
+    box-shadow: 0 12px 32px var(--listen-accent-glow);
+}
+
+.play-button-wrapper:active {
+    transform: scale(0.95);
+}
+
+.play-button-wrapper svg {
+    font-size: 28px;
+    color: white;
+    margin-left: 2px;
+    /* Visual centering adjustment for play icon */
+}
+
+/* Settings Drawer/Popover overrides */
+.settings-popover .ant-popover-inner {
+    padding: 16px;
+    border-radius: 12px;
+}
+
+/* Dark Mode Overrides - Full Screen */
+.dark-mode {
+    --listen-bg: #0f172a;
+    --listen-text: #e2e8f0;
+    --listen-highlight: rgba(139, 92, 246, 0.2);
+}
+
+.dark-mode .chapter-title {
+    color: #f1f5f9;
+}
+
+.dark-mode .reading-text {
+    color: #cbd5e1;
+}
+
+.dark-mode .controls-bar {
+    background: linear-gradient(135deg, rgba(30, 41, 59, 0.95), rgba(15, 23, 42, 0.9));
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow:
+        0 20px 40px -10px rgba(0, 0, 0, 0.4),
+        0 0 0 1px rgba(255, 255, 255, 0.05) inset;
+}
+
+.dark-mode .sentence-wrapper:hover {
+    background-color: rgba(255, 255, 255, 0.05);
+}
+
+.dark-mode .sentence-wrapper.active {
+    background-color: var(--listen-highlight);
+    color: #fff;
+}
+
+/* Header dark mode */
+.dark-mode .ant-affix>div,
+.dark-mode .listen-layout>.ant-affix>div {
+    background: rgba(15, 23, 42, 0.95) !important;
+    border-bottom-color: rgba(255, 255, 255, 0.1) !important;
+}
+
+.dark-mode .ant-typography,
+.dark-mode .ant-typography h1,
+.dark-mode .ant-typography h2,
+.dark-mode .ant-typography h3,
+.dark-mode .ant-typography h4,
+.dark-mode .ant-typography h5 {
+    color: #e2e8f0 !important;
+}
+
+/* Buttons in dark mode */
+.dark-mode .ant-btn {
+    color: #e2e8f0;
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dark-mode .ant-btn:hover {
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.4);
+}
+
+.dark-mode .ant-btn-primary {
+    background: var(--listen-accent);
+    border-color: var(--listen-accent);
+}
+
+/* Drawer dark mode */
+.dark-mode .ant-drawer-content {
+    background: #1e293b;
+}
+
+.dark-mode .ant-drawer-header {
+    background: #1e293b;
+    border-bottom-color: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .ant-drawer-title {
+    color: #f1f5f9;
+}
+
+.dark-mode .ant-drawer-close {
+    color: #94a3b8;
+}
+
+/* Select dark mode */
+.dark-mode .ant-select-selector {
+    background: rgba(255, 255, 255, 0.1) !important;
+    border-color: rgba(255, 255, 255, 0.2) !important;
+    color: #e2e8f0 !important;
+}
+
+.dark-mode .ant-select-arrow {
+    color: #94a3b8;
+}
+
+/* Slider dark mode */
+.dark-mode .ant-slider-rail {
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.dark-mode .ant-slider-track {
+    background: var(--listen-accent);
+}
+
+.dark-mode .ant-slider-handle::after {
+    background: var(--listen-accent);
+    box-shadow: 0 0 8px var(--listen-accent-glow);
+}
+
+/* Mobile adjustments */
+@media (max-width: 480px) {
+    .controls-bar {
+        width: 95%;
+        padding: 12px 16px;
+        bottom: 16px;
+        border-radius: 20px;
+    }
+
+    .play-button-wrapper {
+        width: 52px;
+        height: 52px;
+    }
+}

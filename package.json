@@ -1,27 +1,19 @@
 {
-  "name": "content-chapter-scraper",
-  "version": "2.8.1",
-  "type": "module",
-  "license": "MIT",
-  "scripts": {
-    "start": "nodemon server.js",
-    "deploy": "./run.bat"
-  },
-  "dependencies": {
-    "@microsoft/microsoft-graph-client": "^3.0.7",
-    "dotenv": "^17.2.3",
-    "express": "^4.19.2",
-    "get-mp3-duration": "^1.0.0",
-    "input": "^1.0.1",
-    "isomorphic-fetch": "^3.0.0",
-    "node-edge-tts": "^1.2.8",
-    "pg": "^8.16.3",
-    "swagger-ui-express": "^5.0.1",
-    "uuid": "^13.0.0",
-    "ws": "^8.18.3",
-    "yamljs": "^0.3.0"
-  },
-  "devDependencies": {
-    "nodemon": "^3.1.10"
-  }
+    "name": "truyen-ktts",
+    "version": "3.0.0",
+    "private": true,
+    "workspaces": [
+        "server",
+        "client"
+    ],
+    "scripts": {
+        "server": "npm run dev --workspace=server",
+        "client": "npm run dev --workspace=client",
+        "dev": "concurrently \"npm run server\" \"npm run client\"",
+        "build": "npm run build --workspace=client"
+    },
+    "devDependencies": {
+        "@types/lodash": "^4.17.21",
+        "concurrently": "^8.2.2"
+    }
 }

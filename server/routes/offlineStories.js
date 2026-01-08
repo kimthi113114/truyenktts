@@ -50,16 +50,18 @@ router.get("/offline/story/:filename/chapters", (req, res) => {
     try {
         const { chapters } = parseStoryFile(filePath);
         let i = 0;
+        let flag = false;
         for (const chapter of chapters) {
 
             if (chapter.chapter !== i + 1) {
-
-                console.log(`================== `);
-                console.log(`Chapter ${chapter.chapter}: ${chapter.title}`);
+                flag = true;
             }
             i++;
         }
         console.log(`Total chapters: ${i}`);
+        if (flag) {
+            console.log(`Có lỗi trong file ${safeFilename}`);
+        }
         res.json({ filename: safeFilename, totalChapters: chapters.length, chapters });
     } catch (e) {
         res.status(500).json({ error: "Failed to parse story file" });

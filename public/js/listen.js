@@ -969,67 +969,7 @@ function setSleepTimer(minutes) {
     }
 }
 
-// Cloud Sync Functions
-async function saveToCloud() {
-    const key = document.getElementById('syncKeyInput').value.trim();
-    if (!key) {
-        showToast("Vui lòng nhập mã đồng bộ!", "error");
-        return;
-    }
 
-    const progressData = getStorage('readingProgress');
-    if (!progressData) {
-        showToast("Chưa có dữ liệu để lưu!", "warning");
-        return;
-    }
-
-    try {
-        showToast("Đang lưu lên mây...", "warning");
-        const resp = await fetch('/api/sync/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key, data: JSON.parse(progressData) })
-        });
-        const result = await resp.json();
-        if (resp.ok) {
-            showToast("✅ Lưu thành công!", "success");
-        } else {
-            throw new Error(result.error || "Lỗi không xác định");
-        }
-    } catch (err) {
-        console.error(err);
-        showToast("❌ Lỗi: " + err.message, "error");
-    }
-}
-
-async function loadFromCloud() {
-    const key = document.getElementById('syncKeyInput').value.trim();
-    if (!key) {
-        showToast("Vui lòng nhập mã đồng bộ!", "error");
-        return;
-    }
-
-    if (!confirm("Dữ liệu hiện tại trên máy sẽ bị ghi đè. Bạn có chắc chắn không?")) return;
-
-    try {
-        showToast("Đang tải dữ liệu...", "warning");
-        const resp = await fetch(`/api/sync/load/${encodeURIComponent(key)}`);
-        const result = await resp.json();
-
-        if (resp.ok) {
-            setStorage('readingProgress', JSON.stringify(result.data));
-            showToast("✅ Tải thành công! Đang tải lại...", "success");
-            setTimeout(() => {
-                window.location.reload();
-            }, 1000);
-        } else {
-            throw new Error(result.error || "Lỗi không xác định");
-        }
-    } catch (err) {
-        console.error(err);
-        showToast("❌ Lỗi: " + err.message, "error");
-    }
-}
 
 
 // Close sleep timer modal on outside click

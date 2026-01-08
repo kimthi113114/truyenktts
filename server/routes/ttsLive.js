@@ -79,6 +79,12 @@ function splitText(text, maxLength = 150, minLineLength = 10) {
 async function processTtsChunk(chunk, index, config) {
     const { voice, rate, onProgress } = config;
     if (!chunk.trim()) return null;
+    const cleanedChunk = chunk
+        .replace(/[x×]\s*(\d+)/g, ' với số lượng $1 ')
+        .replace(/[【】\[\]\(\)”“"]/g, '.')
+        .replaceAll("+", " cộng ")
+        .replaceAll("-", " trừ ")
+        .trim();
 
     const tempFile = path.join(os.tmpdir(), `tts_live_${Date.now()}_${index}_${Math.random().toString(36).substring(7)}.mp3`);
     let retries = 5;
@@ -87,7 +93,7 @@ async function processTtsChunk(chunk, index, config) {
     while (retries > 0) {
         try {
             const tts = new EdgeTTS({ voice, rate, volume: "+0%" });
-            await tts.ttsPromise(chunk, tempFile);
+            await tts.ttsPromise(cleanedChunk, tempFile);
 
             // Wait briefly for file system to sync
             await new Promise(r => setTimeout(r, 50));
@@ -179,15 +185,7 @@ router.post("/tts-live-stream", async (req, res) => {
         // Process all chunks parallelly with internal complex logic for each chunk as request
         const buffers = await Promise.all(
             chunks.map((chunk, i) => {
-                // Restore original complex cleaning logic for stream chunks
-                const cleanedChunk = chunk
-                    .replace(/[x×]\s*(\d+)/g, ' với số lượng $1 ')
-                    .replace(/[【】\[\]\(\)”“"]/g, '.')
-                    .replaceAll("+", " cộng ")
-                    .replaceAll("-", " trừ ")
-                    .trim();
-
-                return processTtsChunk(cleanedChunk, i, { voice, rate, onProgress });
+                return processTtsChunk(chunk, i, { voice, rate, onProgress });
             })
         );
 

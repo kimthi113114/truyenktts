@@ -1,21 +1,32 @@
-# Use official Node.js LTS image (bây giờ là Node 20)
-FROM node:20-alpine
+# Use Node.js 20 official image
+FROM node:20
 
-# Set working directory inside container
+# Set working directory to project root
 WORKDIR /app
 
-# Copy package definition files and install dependencies
+# Copy package definition files
 COPY package.json yarn.lock ./
-RUN yarn install --production
+COPY client/package.json ./client/
+COPY server/package.json ./server/
 
-# Copy application source code
+# Install dependencies (including devDependencies for build)
+RUN yarn install
+
+# Copy all source code
 COPY . .
 
-# Expose the port the app runs on (cổng 3001 được khai báo trong Dockerfile)
-EXPOSE 3001
+# Build the client application
+RUN yarn build
 
-# Set environment to production
+# Set environment variables
 ENV NODE_ENV=production
+ENV PORT=3002
 
-# Start the application
-CMD ["yarn", "start"]
+# Expose the port the server listens on
+EXPOSE 3002
+
+# Change working directory to server for correct process.cwd() resolution
+WORKDIR /app/server
+
+# Start the server
+CMD ["node", "index.js"]
