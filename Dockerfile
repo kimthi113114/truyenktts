@@ -9,7 +9,11 @@ COPY package.json yarn.lock ./
 COPY client/package.json ./client/
 COPY server/package.json ./server/
 
+# Copy patches folder (IMPORTANT: Must be before yarn install)
+COPY patches ./patches
+
 # Install dependencies (including devDependencies for build)
+# This will automatically run patch-package via postinstall script
 RUN yarn install
 
 # Copy all source code

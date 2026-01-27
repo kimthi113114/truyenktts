@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
+import { api } from '../services/api';
 import { useParams, useNavigate } from 'react-router-dom';
 import _ from 'lodash';
 import { useSwipeable } from 'react-swipeable';
@@ -172,8 +173,7 @@ const Read = () => {
         const abortController = new AbortController();
 
         // 1. Load chapters list (if not loaded or changed story)
-        fetch(`/api/offline/story/${storyId}/chapters`, { signal: abortController.signal })
-            .then(res => res.json())
+        api.get(`/api/offline/story/${storyId}/chapters`, { signal: abortController.signal })
             .then(data => setChapters(data.chapters || []))
             .catch(err => err.name !== 'AbortError' && console.error('Load chapters failed:', err));
 
@@ -194,8 +194,7 @@ const Read = () => {
             message.loading({ content: `Đang tải Chương ${chapterId}...`, key: 'loading_chapter', duration: 0 });
 
             try {
-                const res = await fetch(`/api/offline/story/${storyId}/chapter/${chapterId}`, { signal: abortController.signal });
-                const data = await res.json();
+                const data = await api.get(`/api/offline/story/${storyId}/chapter/${chapterId}`, { signal: abortController.signal });
                 const contentArray = data.content.split('\n').filter((s: string) => s.trim());
                 contentArray.unshift(`Chương ${chapterId}: ${data.title}`);
 
@@ -234,11 +233,7 @@ const Read = () => {
                 }
             }
         };
-        fetch('/api/sync/save', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(syncPayload)
-        }).catch(console.error);
+        api.post('/api/sync/save', syncPayload).catch(console.error);
 
         return () => {
             abortController.abort();
@@ -343,8 +338,7 @@ const Read = () => {
 
         isPreloadingNextChapter.current = true;
         try {
-            const response = await fetch(`/api/offline/story/${storyId}/chapter/${nextChapterNum}`);
-            const data = await response.json();
+            const data = await api.get(`/api/offline/story/${storyId}/chapter/${nextChapterNum}`);
             const contentArray = data.content.split('\n').filter((s: string) => s.trim());
             contentArray.unshift(`Chương ${nextChapterNum}: ${data.title}`);
 
@@ -478,7 +472,7 @@ const Read = () => {
     const swipeHandlers = useSwipeable({
         onSwipedLeft: () => {
             if (readMode === 'page' && currentPage === totalPages - 1 && totalPages > 0) {
-                goToNextChapter();
+                // goToNextChapter();
             }
         },
         onSwipedRight: () => {
@@ -542,8 +536,8 @@ const Read = () => {
                             className='audio-button'
                             icon={<AudioOutlined style={{ color: 'var(--read-text)' }} />}
                             onClick={() => {
-                                navigate(`/audio/${storyId}/${chapterId}`);
-                                // window.location.href = `/audio/${storyId}/${chapterId}`;
+                                // navigate(`/audio/${storyId}/${chapterId}`);
+                                window.location.href = `/audio/${storyId}/${chapterId}`;
                             }}
                         />
                         <Button type="text" icon={<SettingOutlined style={{ color: 'var(--read-text)' }} />} onClick={() => setIsSettingsVisible(true)} />

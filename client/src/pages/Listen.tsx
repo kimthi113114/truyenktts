@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { api } from '../services/api';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Button, Typography, Drawer, Select, Space, message, Spin, Affix, Slider, Switch } from 'antd';
 import {
@@ -60,8 +61,7 @@ const Listen: React.FC = () => {
     // Initial Load
     useEffect(() => {
         if (storyId) {
-            fetch(`/api/offline/story/${storyId}/chapters`)
-                .then(res => res.json())
+            api.get(`/api/offline/story/${storyId}/chapters`)
                 .then(data => setChapters(data.chapters || []));
         }
     }, [storyId]);
@@ -72,8 +72,7 @@ const Listen: React.FC = () => {
             setIsPlaying(false);
             if (audioRef.current) audioRef.current.pause();
 
-            fetch(`/api/offline/story/${storyId}/chapter/${chapterId}`)
-                .then(res => res.json())
+            api.get(`/api/offline/story/${storyId}/chapter/${chapterId}`)
                 .then(data => {
                     setCurrentChapter(data);
                     setCurrentSentenceIndex(0);
@@ -182,12 +181,7 @@ const Listen: React.FC = () => {
 
         setCurrentSentenceIndex(index);
         try {
-            const response = await fetch('/api/tts-live', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: sentences[index], voice, speed })
-            });
-            const data = await response.json();
+            const data = await api.post('/api/tts-live', { text: sentences[index], voice, speed });
             const audioBlob = await (await fetch(`data:${data.mimeType};base64,${data.audio}`)).blob();
             const url = URL.createObjectURL(audioBlob);
 

@@ -504,7 +504,6 @@ canvas.audio-player-waveform {
 
 .audio-player-controls-area.collapsed .audio-player-select-row,
 .audio-player-controls-area.collapsed .audio-player-waveform-container,
-.audio-player-controls-area.collapsed .audio-player-time-row,
 .audio-player-controls-area.collapsed .audio-player-extras-row {
     display: none;
 }

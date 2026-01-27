@@ -9,7 +9,9 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3002',
       '/covers': 'http://localhost:3002',
-      // '/audio': 'http://localhost:3002',
+
+      // '/api': 'https://truyenkttsv2.onrender.com',
+      // '/covers': 'https://truyenkttsv2.onrender.com',
     }
   }
 })

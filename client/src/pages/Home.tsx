@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Button, Spin, Typography, message, Segmented, Row, Col, Skeleton } from 'antd';
+import { api } from '../services/api';
+import { Button, Typography, message, Segmented, Row, Col, Skeleton } from 'antd';
 import { AppstoreOutlined, BarsOutlined, CloudSyncOutlined, PlayCircleFilled, ReadOutlined } from '@ant-design/icons';
+import StoryDetailDialog from '../components/StoryDetailDialog';
 import './Home.css';
 
 const { Title, Text } = Typography;
@@ -27,7 +28,8 @@ const Home: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [progress, setProgress] = useState<Record<string, Progress>>({});
     const [syncing, setSyncing] = useState(false);
-    const navigate = useNavigate();
+    const [selectedStory, setSelectedStory] = useState<Story | null>(null);
+    const [isDialogOpen, setIsDialogOpen] = useState(false);
 
     useEffect(() => {
         const fetchData = async () => {
@@ -53,9 +55,10 @@ const Home: React.FC = () => {
                 syncPromise = (async () => {
                     try {
                         message.loading({ content: 'Đang tải dữ liệu từ OneDrive...', key: 'sync' });
-                        const historyResp = await fetch(`/api/sync/load/${user.username}`);
-                        if (historyResp.ok) {
-                            return await historyResp.json();
+                        const historyData = await api.get(`/api/sync/load/${user.username}`);
+                        // api.get returns data directly, unlike response.json()
+                        if (historyData) {
+                            return historyData;
                         }
                     } catch (err) {
                         console.error("History fetch error", err);
@@ -69,8 +72,7 @@ const Home: React.FC = () => {
             try {
                 // Minimum loading time for smooth UX
                 const start = Date.now();
-                const storiesResp = await fetch('/api/stories-listen');
-                const storiesData = await storiesResp.json();
+                const storiesData = await api.get('/api/stories-listen');
 
                 if (Array.isArray(storiesData)) {
                     currentStories = storiesData;
@@ -134,7 +136,9 @@ const Home: React.FC = () => {
         setSyncing(true);
         message.loading({ content: 'Đang đồng bộ OneDrive...', key: 'sync' });
 
-        const eventSource = new EventSource('/api/onedrive/init-download');
+        message.loading({ content: 'Đang đồng bộ OneDrive...', key: 'sync' });
+
+        const eventSource = new EventSource(api.getUrl('/api/onedrive/init-download'));
 
         eventSource.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -226,7 +230,10 @@ const Home: React.FC = () => {
                                         <div
                                             key={story.id}
                                             className="story-card"
-                                            onClick={() => navigate(`/listen/${story.id}/${lastChapter}`)}
+                                            onClick={() => {
+                                                setSelectedStory(story);
+                                                setIsDialogOpen(true);
+                                            }}
                                             style={{ animationDelay: `${index * 50}ms` }} // Staggered Animation
                                         >
                                             <div className="story-cover-wrapper">
@@ -267,7 +274,10 @@ const Home: React.FC = () => {
                                         <div
                                             key={story.id}
                                             className="list-item-card"
-                                            onClick={() => navigate(`/listen/${story.id}/${lastChapter}`)}
+                                            onClick={() => {
+                                                setSelectedStory(story);
+                                                setIsDialogOpen(true);
+                                            }}
                                             style={{ animationDelay: `${index * 50}ms` }}
                                         >
                                             <div className="list-item-content">
@@ -291,7 +301,8 @@ const Home: React.FC = () => {
                                                     <div style={{ marginTop: 'auto' }}>
                                                         <Button type="primary" shape="round" size="small" onClick={(e) => {
                                                             e.stopPropagation();
-                                                            navigate(`/listen/${story.id}/${lastChapter}`);
+                                                            setSelectedStory(story);
+                                                            setIsDialogOpen(true);
                                                         }}>
                                                             {hasProgress ? 'Đọc tiếp' : 'Bắt đầu đọc'}
                                                         </Button>
@@ -306,6 +317,17 @@ const Home: React.FC = () => {
                     </>
                 )}
             </div>
+
+            {/* Story Detail Dialog */}
+            <StoryDetailDialog
+                open={isDialogOpen}
+                story={selectedStory}
+                onClose={() => {
+                    setIsDialogOpen(false);
+                    setSelectedStory(null);
+                }}
+                currentProgress={selectedStory ? progress[selectedStory.id] : undefined}
+            />
         </div>
     );
 };

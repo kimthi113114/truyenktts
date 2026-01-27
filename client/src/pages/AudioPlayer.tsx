@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { api } from '../services/api';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
     LeftOutlined,
@@ -116,8 +117,7 @@ const AudioPlayer: React.FC = () => {
     // Initial Load
     useEffect(() => {
         // Load stories
-        fetch('/api/stories-listen')
-            .then(res => res.json())
+        api.get('/api/stories-listen')
             .then(data => setStories(data))
             .catch(console.error);
 
@@ -144,8 +144,7 @@ const AudioPlayer: React.FC = () => {
         if (!selectedStoryId) return;
 
         setLoading(true);
-        fetch(`/api/offline/story/${selectedStoryId}/chapters`)
-            .then(res => res.json())
+        api.get(`/api/offline/story/${selectedStoryId}/chapters`)
             .then(data => {
                 const newChapters: Record<number, Chapter> = {};
                 if (data.chapters) {
@@ -221,6 +220,7 @@ const AudioPlayer: React.FC = () => {
                 setLoading(false);
                 return;
             }
+            setCurrentTime(0);
             handleNextChapter();
         };
 
@@ -382,11 +382,7 @@ const AudioPlayer: React.FC = () => {
                         }
                     }
                 };
-                fetch('/api/sync/save', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(syncPayload)
-                })
+                api.post('/api/sync/save', syncPayload)
                     .then(() => message.success('Đã lưu tiến độ nghe'))
                     .catch(console.error);
 
@@ -445,8 +441,7 @@ const AudioPlayer: React.FC = () => {
 
         // setLoading(true); // Handled in playChapter
         try {
-            const res = await fetch(`/api/offline/story/${sid}/chapter/${cid}`);
-            const data = await res.json();
+            const data = await api.get(`/api/offline/story/${sid}/chapter/${cid}`);
             return data.content;
         } catch (e) {
             toast('Lỗi tải nội dung', 'error');
@@ -472,7 +467,7 @@ const AudioPlayer: React.FC = () => {
         const { voice, speed } = stateRef.current;
 
         try {
-            const response = await fetch('/api/tts-live-stream', {
+            const response = await fetch(api.getUrl('/api/tts-live-stream'), {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ text, voice: voiceOverride || voice }),
@@ -671,17 +666,19 @@ const AudioPlayer: React.FC = () => {
                     </button>
 
                     <div className="audio-player-header-title">
-                        <h1 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px', margin: '0 auto' }}>
+                        <h1 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '250px', margin: '0 auto' }}>
                             {stories.find(s => s.id === selectedStoryId)?.title || 'Truyện KTTS'}
                         </h1>
-                        <p style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '200px', margin: '2px auto 0' }}>
+                        <p style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '250px', margin: '2px auto 0' }}>
                             {chapters[Number(selectedChapterId)]
                                 ? `Chương ${selectedChapterId}: ${chapters[Number(selectedChapterId)].title}`
                                 : 'PREMIUM PLAYER'}
                         </p>
                     </div>
 
-                    <button className="audio-player-btn-icon" onClick={() => navigate(`/listen/${selectedStoryId}/${selectedChapterId}`)} title="Chế độ đọc">
+                    <button className="audio-player-btn-icon" onClick={() => {
+                        window.location.href = `/listen/${selectedStoryId}/${selectedChapterId}`;
+                    }} title="Chế độ đọc">
                         <ReadOutlined style={{ fontSize: '18px' }} />
                     </button>
                 </div>

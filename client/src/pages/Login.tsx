@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { api } from '../services/api';
 import { Form, Input, Button, Card, Typography, message } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 
@@ -12,12 +13,7 @@ const Login: React.FC = () => {
     const onFinish = async (values: any) => {
         setLoading(true);
         try {
-            const response = await fetch('/api/login', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(values)
-            });
-            const data = await response.json();
+            const data = await api.post('/api/login', values);
             if (data.success) {
                 localStorage.setItem('user', JSON.stringify(data.user));
                 message.success('Đăng nhập thành công');
