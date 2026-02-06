@@ -7,7 +7,13 @@ export default defineConfig({
   server: {
     host: true,
     proxy: {
-      '/api': 'http://localhost:3002',
+      '/api': {
+        target: 'http://localhost:3002',
+        changeOrigin: true,
+        // Enable streaming for TTS endpoints
+        ws: true,
+        timeout: 120000, // 2 minutes timeout for TTS generation
+      },
       '/covers': 'http://localhost:3002',
 
       // '/api': 'https://truyenkttsv2.onrender.com',

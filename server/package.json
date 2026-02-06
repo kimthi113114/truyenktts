@@ -4,8 +4,7 @@
   "type": "module",
   "scripts": {
     "start": "node index.js",
-    "dev": "nodemon index.js",
-    "postinstall": "patch-package"
+    "dev": "nodemon index.js"
   },
   "dependencies": {
     "@microsoft/microsoft-graph-client": "^3.0.7",

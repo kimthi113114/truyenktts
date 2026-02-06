@@ -1,0 +1,307 @@
+/* StoryDetailDialog.css */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+/* Modal Override */
+.story-detail-modal .ant-modal-content {
+    border-radius: 24px;
+    padding: 0;
+    overflow: hidden;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+}
+
+.story-detail-modal .ant-modal-body {
+    padding: 0;
+    height: 100%;
+}
+
+.story-detail-modal .ant-modal-close {
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.1);
+    border-radius: 50%;
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+    z-index: 1000;
+}
+
+.story-detail-modal .ant-modal-close:hover {
+    background: rgba(0, 0, 0, 0.2);
+    transform: rotate(90deg);
+}
+
+.story-detail-modal .ant-modal-close-x {
+    width: 36px;
+    height: 36px;
+    line-height: 36px;
+    color: white;
+    /* Default white for hero overlay */
+}
+
+/* Detail Container */
+.detail-container {
+    display: flex;
+    flex-direction: column;
+    /* Mobile First: Stacked */
+    height: 700px;
+    max-height: 80vh;
+    background: #fff;
+    overflow: hidden;
+}
+
+/* --- Hero Section (Top/Left) --- */
+.detail-hero {
+    position: relative;
+    flex: 0 0 auto;
+    width: 100%;
+    height: 300px;
+    /* Mobile Hero Height */
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    color: white;
+}
+
+.hero-backdrop {
+    position: absolute;
+    inset: 0;
+    background-size: cover;
+    background-position: center;
+    filter: blur(30px) brightness(0.5);
+    transform: scale(1.1);
+}
+
+.hero-overlay {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to top, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.3) 60%, transparent 100%);
+}
+
+.hero-content-wrapper {
+    position: relative;
+    z-index: 2;
+    padding: 24px;
+    display: flex;
+    align-items: flex-end;
+    gap: 20px;
+}
+
+.detail-cover {
+    width: 100px;
+    height: 150px;
+    border-radius: 8px;
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.detail-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding-bottom: 4px;
+}
+
+.detail-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    line-height: 1.2;
+    margin: 0;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+.detail-author {
+    font-size: 1rem;
+    opacity: 0.9;
+    margin: 0;
+}
+
+.detail-meta {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 0.85rem;
+    opacity: 0.8;
+    margin-top: 4px;
+}
+
+.detail-play-btn {
+    margin-top: 12px;
+    background: #1677ff;
+    border: none;
+    box-shadow: 0 4px 12px rgba(22, 119, 255, 0.4);
+    font-weight: 600;
+}
+
+/* --- Chapters Section (Bottom/Right) --- */
+.detail-chapters {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #fdfdfd;
+    overflow: hidden;
+    position: relative;
+}
+
+.chapters-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+    background: #fff;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-shrink: 0;
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.02);
+    z-index: 10;
+    
+}
+
+.chapters-header h4 {
+    margin: 0;
+    font-weight: 600;
+    color: #1f2937;
+    font-size: 1.1rem;
+}
+
+.chapter-list-container {
+    flex: 1;
+    /* Takes remaining space */
+    overflow-y: auto;
+    /* Only this scrolls */
+    overflow-x: hidden;
+    padding: 0;
+    scroll-behavior: smooth;
+    min-height: 0;
+    /* Important for flex scrolling */
+}
+
+.chapter-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.chapter-item {
+    padding: 14px 24px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.04);
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+.chapter-item:hover {
+    background: rgba(22, 119, 255, 0.04);
+}
+
+.chapter-item.active {
+    background: rgba(22, 119, 255, 0.08);
+}
+
+.chapter-item.active .chapter-name {
+    color: #1677ff;
+    font-weight: 600;
+}
+
+.chapter-name {
+    font-size: 0.95rem;
+    color: #374151;
+}
+
+.reading-indicator {
+    font-size: 0.75rem;
+    color: #1677ff;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+/* Footer (Pagination) */
+.chapters-footer {
+    padding: 12px 24px;
+    border-top: 1px solid rgba(0, 0, 0, 0.06);
+    background: #fff;
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+    z-index: 10;
+}
+
+/* --- Desktop Layout (Landscape logic) --- */
+@media (min-width: 769px) {
+    .detail-container {
+        flex-direction: row;
+        height: 600px;
+    }
+
+    .detail-hero {
+        width: 320px;
+        /* Fixed width sidebar for desktop */
+        height: 100%;
+        border-right: 1px solid rgba(0, 0, 0, 0.06);
+    }
+
+    .hero-content-wrapper {
+        flex-direction: column;
+        align-items: center;
+        text-align: center;
+        justify-content: center;
+        height: 100%;
+        padding: 40px 24px;
+        gap: 16px;
+    }
+
+    .detail-cover {
+        width: 160px;
+        height: 240px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+
+    .detail-title {
+        font-size: 1.6rem;
+    }
+
+    .detail-play-btn {
+        margin-top: 24px;
+        width: 100%;
+        height: 44px;
+    }
+
+    .story-detail-modal .ant-modal-close-x {
+        color: #666;
+        /* Grey close button on white background (desktop usually puts it outside or top right of modal) */
+    }
+
+    /* On desktop, the close button often sits on the hero. Let's force it white for visibility on the hero side or adjust positioning */
+    .story-detail-modal .ant-modal-close {
+        right: auto;
+        left: 20px;
+        /* Move close button to left on desktop hero? Or keep right if overflow. */
+        background: rgba(255, 255, 255, 0.2);
+    }
+}
+
+/* --- Mobile Full Screen Overrides --- */
+.full-screen-modal .ant-modal,
+.full-screen-modal .ant-modal-content {
+    max-width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+}
+
+.full-screen-modal .detail-container {
+    height: 100%;
+    max-height: none;
+}
