@@ -162,6 +162,7 @@ router.post("/tts-live-stream", async (req, res) => {
     try {
         const { text, voice = "vi-VN-NamMinhNeural", speed = 1.0 } = req.body;
         if (!text) return res.status(400).json({ error: "Text is required" });
+        console.log("tts-live-stream", text.split("\n")[0]);
 
         // Enable streaming headers
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
