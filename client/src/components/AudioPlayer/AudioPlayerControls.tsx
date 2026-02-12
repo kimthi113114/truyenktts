@@ -68,8 +68,8 @@ const AudioPlayerControls: React.FC<AudioPlayerControlsProps> = ({
                     onChange={onSliderChange}
                     disabled={loading}
                     tooltip={{ formatter: (value) => formatTime(value || 0) }}
-                    trackStyle={{ background: 'linear-gradient(to right, #8b5cf6, #f472b6)', height: 6 }}
-                    handleStyle={{ borderColor: '#f472b6', boxShadow: '0 0 0 2px rgba(244, 114, 182, 0.3)' }}
+                    trackStyle={{ background: 'linear-gradient(to right, #92400e, #f59e0b)', height: 6 }}
+                    handleStyle={{ borderColor: '#f59e0b', boxShadow: '0 0 0 2px rgba(245, 158, 11, 0.3)', backgroundColor: '#f59e0b' }}
                     railStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.15)', height: 6 }}
                 />
             </div>
