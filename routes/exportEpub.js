@@ -23,6 +23,10 @@ router.post("/export-epub", async (req, res) => {
         const first = keys[0];
         const last = keys[keys.length - 1];
 
+        console.log("title", title);
+        console.log("author", author);
+        console.log("cover", cover);
+
         const content = keys.map((num, idx) => {
             const { chapterTitle, text } = chapters[num];
             const cleanText = (text || "")

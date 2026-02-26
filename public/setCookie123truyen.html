@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Set Cookie 123truyen.vn</title>
+  <style>
+    body { font-family: 'Segoe UI', sans-serif; max-width: 750px; margin: 40px auto; padding: 20px; background: #1a1a2e; color: #eee; }
+    h1 { color: #e94560; }
+    .steps { background: #16213e; padding: 20px; border-radius: 10px; margin: 20px 0; }
+    .steps ol { padding-left: 20px; line-height: 2; }
+    .steps code { background: #0f3460; padding: 2px 8px; border-radius: 4px; color: #e94560; }
+    label { display: block; margin-top: 15px; font-weight: bold; color: #a8d8ea; }
+    textarea, input { width: 100%; padding: 10px; font-size: 14px; border: 2px solid #0f3460; border-radius: 8px; background: #16213e; color: #eee; box-sizing: border-box; font-family: monospace; }
+    textarea { height: 80px; resize: vertical; }
+    input:focus, textarea:focus { border-color: #e94560; outline: none; }
+    button { padding: 12px 30px; font-size: 16px; background: #e94560; color: white; border: none; border-radius: 8px; cursor: pointer; margin-top: 15px; }
+    button:hover { background: #c73e54; }
+    #result { margin-top: 15px; padding: 12px; border-radius: 8px; display: none; }
+    .success { background: #1b4332; color: #95d5b2; display: block !important; }
+    .error { background: #4a1a1a; color: #ff6b6b; display: block !important; }
+    .note { background: #2d2d44; padding: 10px; border-radius: 8px; margin-top: 10px; font-size: 13px; color: #aaa; }
+  </style>
+</head>
+<body>
+  <h1>🔐 Set Cookie 123truyen.vn</h1>
+
+  <div class="steps">
+    <h3>Hướng dẫn (chỉ mất 30 giây):</h3>
+    <ol>
+      <li>Mở <a href="https://123truyen.vn" target="_blank" style="color:#e94560">https://123truyen.vn</a> trong Chrome</li>
+      <li>Vượt qua Cloudflare (click checkbox nếu có)</li>
+      <li>Nhấn <code>F12</code> → tab <code>Network</code> → bấm <code>F5</code> để reload</li>
+      <li>Click vào request đầu tiên (tên <code>123truyen.vn</code>)</li>
+      <li>Trong <code>Request Headers</code>, tìm và copy giá trị của:
+        <ul>
+          <li><code>Cookie</code> — toàn bộ chuỗi cookie</li>
+          <li><code>User-Agent</code> — chuỗi user-agent</li>
+        </ul>
+      </li>
+      <li>Dán vào các ô bên dưới và nhấn <strong>Lưu</strong></li>
+    </ol>
+  </div>
+
+  <label for="cookieValue">Cookie (toàn bộ chuỗi từ Request Headers):</label>
+  <textarea id="cookieValue" placeholder="cf_chl_rc_ni=1; cf_clearance=abc123..."></textarea>
+
+  <label for="userAgent">User-Agent (copy từ Request Headers):</label>
+  <input type="text" id="userAgent" placeholder="Mozilla/5.0 (Windows NT 10.0; Win64; x64) ..." />
+
+  <div class="note">
+    💡 <strong>Mẹo:</strong> User-Agent thường có dạng <code>Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/...</code>
+    <br>Bạn cũng có thể lấy bằng cách gõ <code>navigator.userAgent</code> trong Console (F12 → Console).
+  </div>
+
+  <button onclick="saveCookie()">💾 Lưu Cookie + User-Agent</button>
+  <div id="result"></div>
+
+  <script>
+    async function saveCookie() {
+      const cookie = document.getElementById('cookieValue').value.trim();
+      const userAgent = document.getElementById('userAgent').value.trim();
+      const resultEl = document.getElementById('result');
+
+      if (!cookie || !userAgent) {
+        resultEl.className = 'error';
+        resultEl.textContent = '❌ Vui lòng nhập cả Cookie và User-Agent!';
+        return;
+      }
+      try {
+        const resp = await fetch('/setCookie123truyen', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cookie, userAgent })
+        });
+        const data = await resp.json();
+        if (data.success) {
+          resultEl.className = 'success';
+          resultEl.textContent = '✅ ' + data.message;
+        } else {
+          resultEl.className = 'error';
+          resultEl.textContent = '❌ ' + (data.error || 'Lỗi không xác định');
+        }
+      } catch (err) {
+        resultEl.className = 'error';
+        resultEl.textContent = '❌ Lỗi: ' + err.message;
+      }
+    }
+  </script>
+</body>
+</html>

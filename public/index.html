@@ -102,10 +102,10 @@
                                 </option>
                             </datalist>
                         </div>
-                        <div class="input-group">
+                        <div class="input-group" style="display: none;">
                             <label for="geminiApiKey">🔑 Gemini API Key:</label>
                             <input type="password" id="geminiApiKey" placeholder="Nhập API Key..." class="url-input"
-                                value="AIzaSyCGEsgAdYoK1fx9ng3avx66-DZxid4JXZo" style="flex: 2;">
+                                value="AIzaSyCcB5jLBMAdkQ9mXsFf_q4kDVQgUW9kYtw" style="flex: 2;">
                         </div>
                         <div class="chapter-range input-group">
                             <div class="control-group">
@@ -131,8 +131,20 @@
                                 <span class="slider round"></span>
                             </label>
                         </div>
+                        <div class="input-group"
+                            style="flex-direction: column; align-items: flex-start; gap: 5px;padding-top: 10px;">
+                            <label for="enableSplitChapter" style="margin: 0; cursor: pointer; font-weight: 500;">Tự
+                                động
+                                tách chương dài (>10k ký tự)?</label>
+                            <label class="switch">
+                                <input type="checkbox" id="enableSplitChapter" checked>
+                                <span class="slider round"></span>
+                            </label>
+                        </div>
                     </div>
-                    <button type="submit" id="fetchBtn">🚀 Lấy Nội dung Hàng loạt</button>
+                    <div class="settings-row-4">
+                        <button type="submit" id="fetchBtn">🚀 Lấy Nội dung Hàng loạt</button>
+                    </div>
                 </form>
             </div>
 
@@ -283,6 +295,11 @@
                         🤖 Init Copilot (Manual Login)
                     </button>
 
+                    <button type="button" id="initChatGPT" class="download-button" onclick="initChatGPT()"
+                        style="background-color: #17a2b8;">
+                        🤖 Init ChatGPT
+                    </button>
+
                     <a href="/" class="download-button btn-primary"
                         style="text-decoration: none; display: inline-flex; align-items: center; justify-content: center;">
                         🎧 Nghe Truyện (TTS Page)
@@ -292,6 +309,11 @@
                         <label for="importFile">Hoặc Import File .txt đã xuất (để tiếp tục chỉnh sửa):</label>
                         <input type="file" id="importFile" accept=".txt" onchange="handleFileImport(event)">
                     </div>
+                    <button id="chatGPTAllBtn" style="display:flex;align-items:center;gap:8px;"
+                        onclick="chatGPTAllBtn()">
+                        <img src="https://chat.openai.com/favicon.ico" width="18" height="18" />
+                        Gọi ChatGPT hàng loạt
+                    </button>
                 </div>
             </div>
 
@@ -334,6 +356,7 @@
                 STORY_CONTENT: '/api/story-content',
                 TTS_STATUS: '/api/tts/status',
                 COPILOT_INIT: '/api/copilot/init',
+                CHATGPT_INIT: '/api/chatgpt/init',
                 COPILOT_ASK: '/api/copilot/ask'
             }
         };
@@ -364,7 +387,9 @@
                 startChapter: document.getElementById("start-chapter"),
                 endChapter: document.getElementById("end-chapter"),
                 geminiApiKey: document.getElementById("geminiApiKey"),
-                fileImport: document.getElementById("importFile")
+                fileImport: document.getElementById("importFile"),
+                customStartChapter: document.getElementById("custom-start-chapter"),
+                autoFillEdited: document.getElementById("autoFillEdited")
             },
             buttons: {
                 fetch: document.getElementById("fetchBtn"),
@@ -409,6 +434,40 @@
 
             toast.classList.add('show');
             setTimeout(() => toast.classList.remove('show'), 3000);
+        };
+
+        /**
+         * =================================================================
+         * 4.1 PERSISTENCE LOGIC (LOCAL STORAGE)
+         * =================================================================
+         */
+        const saveFormData = () => {
+            const data = {
+                url: DOM.inputs.url.value,
+                startChapter: DOM.inputs.startChapter.value,
+                endChapter: DOM.inputs.endChapter.value,
+                geminiApiKey: DOM.inputs.geminiApiKey.value,
+                customStartChapter: DOM.inputs.customStartChapter.value,
+                autoFillEdited: DOM.inputs.autoFillEdited.checked
+            };
+            localStorage.setItem('scraper_form_data', JSON.stringify(data));
+        };
+
+        const loadFormData = () => {
+            const savedData = localStorage.getItem('scraper_form_data');
+            if (savedData) {
+                try {
+                    const data = JSON.parse(savedData);
+                    if (data.url) DOM.inputs.url.value = data.url;
+                    if (data.startChapter) DOM.inputs.startChapter.value = data.startChapter;
+                    if (data.endChapter) DOM.inputs.endChapter.value = data.endChapter;
+                    if (data.geminiApiKey) DOM.inputs.geminiApiKey.value = data.geminiApiKey;
+                    if (data.customStartChapter !== undefined) DOM.inputs.customStartChapter.value = data.customStartChapter;
+                    if (data.autoFillEdited !== undefined) DOM.inputs.autoFillEdited.checked = data.autoFillEdited;
+                } catch (e) {
+                    console.error("Error loading saved data", e);
+                }
+            }
         };
 
         // Copy text vào clipboard
@@ -493,6 +552,15 @@
                 const aiBtnClass = data.isGenerated ? 'btn-generated' : '';
                 const aiBtnText = data.isGenerated ? '✅ Đã Rewrite (Chạy lại?)' : '✨ Gemini Rewrite';
 
+                // --- LOGIC MÀU SẮC CHO COUNTER DỰA TRÊN SỰ KHÁC BIỆT ---
+                const difference = data.originalContent.length - initialCharCount;
+                let counterColor = '';
+                if (difference >= 1300) {
+                    counterColor = 'red';
+                } else if (difference >= 1000) {
+                    counterColor = 'orange';
+                }
+
                 const chapterHtml = `
                 <section class="chapter-block ${data.isError ? 'error' : ''} ${copiedClass} ${generatedClass}" data-chapter-number="${data.chapterNumber}">
                     <div class="chapter-header-row">
@@ -504,7 +572,7 @@
                         />
                         <span class="char-count-display flex">
                             (${data.originalContent.length.toLocaleString()} ký tự Gốc) - 
-                            <span id="${chapterId}_counter">${initialCharCount.toLocaleString()} ký tự đã sửa</span>
+                            <span id="${chapterId}_counter" style="color: ${counterColor};">${initialCharCount.toLocaleString()} ký tự đã sửa</span>
                         </span>
                     </div>
 
@@ -632,7 +700,28 @@
 
         window.onChangeTextArea = (textarea, baseId) => {
             const label = document.getElementById(`${baseId}_counter`);
-            if (label) label.textContent = `${textarea.value.length.toLocaleString()} ký tự đã sửa`;
+            if (!label) return;
+
+            // Get the chapter number from the baseId (format: "chapter-123")
+            const chapterNumber = parseInt(baseId.replace('chapter-', ''));
+            const chapterItem = state.chapters.find(c => c.chapterNumber === chapterNumber);
+
+            if (chapterItem) {
+                const originalLength = chapterItem.originalContent.length;
+                const editedLength = textarea.value.length;
+                const difference = originalLength - editedLength;
+
+                // Apply color based on difference
+                if (difference >= 1300) {
+                    label.style.color = 'red';
+                } else if (difference >= 1000) {
+                    label.style.color = 'orange';
+                } else {
+                    label.style.color = ''; // Reset to default
+                }
+            }
+
+            label.textContent = `${textarea.value.length.toLocaleString()} ký tự đã sửa`;
         };
 
         window.callGeminiApi = async (chapterId, chapterNumber) => {
@@ -826,8 +915,8 @@
                     const safeNum = safeTrim(data.chapterNumber);
 
                     const header = (safeNum || safeTitle)
-                        ? `Chương ${safeNum || chapterNumber}${safeTitle ? ': ' + safeTitle : ''}`
-                        : `Chương ${chapterNumber} (Không có tiêu đề)`;
+                        ? `Chương ${safeNum || chapterNumber}: ${safeTitle}`
+                        : `Chương ${chapterNumber}: (Không có tiêu đề)`;
 
                     const chapterLine = safeTrim(data.chapterLine);
 
@@ -871,25 +960,33 @@
             };
         };
 
-        // Helper function to split text
+        // Helper function to split text - Enhanced to support unlimited parts
         const splitChapterContent = (text) => {
             const len = text.length;
-            if (len <= 10000) return [text];
+            const TARGET_CHUNK_SIZE = 10000; // Target characters per part
+
+            // No need to split if content is smaller than target
+            if (len <= TARGET_CHUNK_SIZE) return [text];
+
+            // Calculate number of parts needed (dynamically based on length)
+            const numParts = Math.ceil(len / TARGET_CHUNK_SIZE);
+            const approxChunkSize = Math.ceil(len / numParts);
 
             const parts = [];
-            let numParts = len > 20000 ? 3 : 2;
-            let approxChunkSize = Math.ceil(len / numParts);
             let startIndex = 0;
 
             for (let i = 0; i < numParts - 1; i++) {
                 let cutIndex = startIndex + approxChunkSize;
-                // Find nearest newline or period to avoid breaking format mid-sentence
-                // Search backward from cutIndex first, then forward if needed
-                let searchRange = 1000; // Search window
+
+                // Find nearest newline or period to avoid breaking mid-sentence
+                let searchRange = 500; // Search window around cutIndex
                 let foundIndex = -1;
 
                 // Priority 1: Newline
-                let searchStr = text.substring(Math.max(0, cutIndex - searchRange), Math.min(len, cutIndex + searchRange));
+                let searchStr = text.substring(
+                    Math.max(0, cutIndex - searchRange),
+                    Math.min(len, cutIndex + searchRange)
+                );
                 let relativeIndex = searchStr.lastIndexOf('\n');
 
                 if (relativeIndex !== -1) {
@@ -902,7 +999,8 @@
                     }
                 }
 
-                if (foundIndex === -1) foundIndex = cutIndex; // Fallback: Hard cut
+                // Fallback: Hard cut if no good break point found
+                if (foundIndex === -1) foundIndex = cutIndex;
 
                 parts.push(text.substring(startIndex, foundIndex).trim());
                 startIndex = foundIndex;
@@ -915,6 +1013,14 @@
 
         DOM.form.addEventListener("submit", async (e) => {
             e.preventDefault();
+
+            // Hiển thị cảnh báo xác nhận
+            const confirmed = window.confirm("⚠️ Bạn có chắc chắn muốn lấy nội dung các chương?\n\nQuá trình này có thể mất một thời gian.");
+            if (!confirmed) {
+                return; // Hủy bỏ nếu người dùng không xác nhận
+            }
+
+            saveFormData(); // Lưu dữ liệu khi nhấn fetchBtn (submit)
 
             const startChapter = parseInt(DOM.inputs.startChapter.value, 10);
             const endChapter = parseInt(DOM.inputs.endChapter.value, 10);
@@ -1032,12 +1138,28 @@
          * 8. IMPORT / EXPORT LOGIC
          * =================================================================
          */
+        window.chatGPTAllBtn = () => {
+            document.querySelectorAll('.chapter-block').forEach(section => {
 
+                // Tìm span có style màu đỏ trong section này
+                const redCounter = section.querySelector('span[style*="color: red"]');
+
+                if (redCounter) {
+                    // Nếu có -> tìm nút ChatGPT Rewrite trong section này
+                    const chatgptBtn = section.querySelector('button[onclick*="callChatgptApi"]');
+
+                    if (chatgptBtn) {
+                        console.log('Calling ChatGPT for chapter:', section.dataset.chapterNumber);
+                        chatgptBtn.click();
+                    }
+                }
+            });
+        };
         window.downloadAllChapterResults = () => {
             let fullContent = "";
             let count = 0;
             state.chapters.forEach(data => {
-                const content = data.editedContent.trim();
+                const content = data.editedContent ? data.editedContent.trim() : data.originalContent.trim();
                 if (content) {
                     count++;
                     fullContent += `\n\n=== ${data.header} ===\n\n${content}`;
@@ -1062,8 +1184,9 @@
         };
 
         const parseImportedText = (text) => {
-            const titles = {};
-            const contents = {};
+            const list = [];
+            const titlesMap = {};
+            const contentsMap = {};
             const rawText = (text || '').trim();
             const standardizedText = '\n' + rawText + '\n';
             const useOldLogic = rawText.startsWith("===");
@@ -1074,10 +1197,16 @@
             let match;
             while ((match = regex.exec(standardizedText)) !== null) {
                 const num = parseInt(match[1], 10);
-                titles[num] = (match[2] || '').trim();
-                contents[num] = (match[3] || '').trim();
+                const title = (match[2] || '').trim();
+                const content = (match[3] || '').trim();
+
+                list.push({ num, title, content });
+
+                // For backward compatibility / lookup by number
+                titlesMap[num] = title;
+                contentsMap[num] = content;
             }
-            return { titles, contents };
+            return { list, titles: titlesMap, contents: contentsMap };
         };
 
         window.handleFileImport = (event) => {
@@ -1086,32 +1215,64 @@
 
             const reader = new FileReader();
             reader.onload = (e) => {
-                const { titles, contents } = parseImportedText(e.target.result);
-                const chapterNumbers = Object.keys(contents).map(Number).sort((a, b) => a - b);
+                const { list, titles, contents } = parseImportedText(e.target.result);
 
-                if (chapterNumbers.length === 0) {
+                if (list.length === 0) {
                     showToast("❌ File import lỗi format!", "error");
                     return;
                 }
 
                 state.importedData = { titles, contents };
-                DOM.inputs.startChapter.value = chapterNumbers[0];
-                DOM.inputs.endChapter.value = chapterNumbers[chapterNumbers.length - 1];
+                DOM.inputs.startChapter.value = list[0].num;
+                DOM.inputs.endChapter.value = list[list.length - 1].num;
 
                 const shouldAutoFill = document.getElementById('autoFillEdited').checked;
-                state.chapters = chapterNumbers.map(num => ({
-                    chapterNumber: num,
-                    header: `Chương ${num}${titles[num] ? ': ' + titles[num] : ''}`,
-                    originalContent: contents[num],
-                    editedContent: shouldAutoFill ? contents[num] : "",
-                    isError: false,
-                    isCopied: false,
-                    isGenerated: false
-                }));
+                const shouldSplit = document.getElementById('enableSplitChapter').checked;
+
+                state.chapters = [];
+                let currentDisplayNum = list[0].num;
+
+                list.forEach(item => {
+                    const originalContent = item.content;
+                    const num = item.num;
+                    const titleText = item.title ? ': ' + item.title : '';
+
+                    if (shouldSplit) {
+                        // Apply splitting logic
+                        const contentParts = splitChapterContent(originalContent);
+                        const totalParts = contentParts.length;
+
+                        contentParts.forEach((partContent, index) => {
+                            const isMultiPart = totalParts > 1;
+                            const partLabel = isMultiPart ? ` (Phần ${index + 1}/${totalParts})` : "";
+
+                            state.chapters.push({
+                                chapterNumber: currentDisplayNum++,
+                                header: `Chương ${num}${titleText}${partLabel}`,
+                                originalContent: partContent,
+                                editedContent: shouldAutoFill ? partContent : "",
+                                isError: false,
+                                isCopied: false,
+                                isGenerated: false
+                            });
+                        });
+                    } else {
+                        // No splitting, keep as single chapter
+                        state.chapters.push({
+                            chapterNumber: currentDisplayNum++,
+                            header: `Chương ${num}${titleText}`,
+                            originalContent: originalContent,
+                            editedContent: shouldAutoFill ? originalContent : "",
+                            isError: false,
+                            isCopied: false,
+                            isGenerated: false
+                        });
+                    }
+                });
 
                 state.currentPage = 1;
                 renderCurrentPage();
-                DOM.display.status.textContent = `✅ Đã Import ${chapterNumbers.length} chương.`;
+                DOM.display.status.textContent = `✅ Đã Import ${list.length} chương gốc → ${state.chapters.length} chương sau xử lý.`;
                 DOM.buttons.fetch.disabled = false;
                 DOM.buttons.download.disabled = false;
             };
@@ -1226,6 +1387,7 @@
         // Page Events
         window.addEventListener("beforeunload", (e) => { e.preventDefault(); e.returnValue = ""; });
         document.addEventListener('DOMContentLoaded', async () => {
+            loadFormData(); // Load dữ liệu khi trang web được tải
             try {
                 const resp = await fetch(CONFIG.API_ENDPOINTS.STORIES);
                 if (!resp.ok) return;
@@ -1283,6 +1445,35 @@
                 if (data.status === 'opened' || data.status === 'open') {
                     showToast("✅ " + data.message, "success");
                     btn.textContent = "✅ Copilot Ready (Log in manually)";
+                    setTimeout(() => {
+                        btn.disabled = false;
+                        btn.textContent = originalText;
+                    }, 5000);
+                } else {
+                    showToast("⚠️ " + (data.error || "Unknown error"), "warning");
+                    btn.textContent = originalText;
+                    btn.disabled = false;
+                }
+            } catch (err) {
+                console.error(err);
+                showToast("❌ Connection failed", "error");
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        };
+        window.initChatGPT = async () => {
+            const btn = document.getElementById('initChatGPT');
+            const originalText = btn.textContent;
+            btn.textContent = "⏳ Opening...";
+            btn.disabled = true;
+
+            try {
+                const response = await fetch(CONFIG.API_ENDPOINTS.CHATGPT_INIT, { method: 'GET' });
+                const data = await response.json();
+
+                if (data.status === 'opened' || data.status === 'open') {
+                    showToast("✅ " + data.message, "success");
+                    btn.textContent = "✅ ChatGPT Ready (Log in manually)";
                     setTimeout(() => {
                         btn.disabled = false;
                         btn.textContent = originalText;

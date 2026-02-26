@@ -41,3 +41,6 @@ run.bat
 cookies/
 data/
 user_data/
+covers/
+user_data_copilot/
+output/
